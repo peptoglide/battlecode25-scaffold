@@ -213,6 +213,7 @@ def get_server_version(ver_data) -> str | None:
                 return None
             return version
     except Exception as e:
+        print(f"Failed to fetch server version: {e}")
         return None
 
 
