@@ -10,7 +10,6 @@ import platform
 import subprocess
 import urllib.request
 from pathlib import Path
-# Hello
 
 
 # Check python version
