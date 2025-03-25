@@ -24,6 +24,7 @@ directions = [
 
 bot_chance = {UnitType.SOLDIER : 33, UnitType.MOPPER : 33, UnitType.SPLASHER : 34}
 tower_chance = {UnitType.LEVEL_ONE_MONEY_TOWER : 45, UnitType.LEVEL_ONE_PAINT_TOWER : 45, UnitType.LEVEL_ONE_DEFENSE_TOWER : 10}
+bot_name = {UnitType.SOLDIER : "SOLDIER", UnitType.MOPPER : "MOPPER", UnitType.SPLASHER : "SPLASHER"}
 
 def update_bot_chance(soldier, mopper, splasher):
     bot_chance[UnitType.SOLDIER] = soldier
@@ -41,6 +42,10 @@ def get_random_unit(probabilities):
         if n <= prob: return unit
         n -= prob
 
+# Determine build delays between each bot spawned by a tower
+buildDelay = 10 # Tune
+buildDeviation = 3
+buildCooldown = 0
 
 def turn():
     """
@@ -63,6 +68,7 @@ def turn():
 
 
 def run_tower():
+    global buildCooldown
     # Pick a direction to build in.
     dir = directions[random.randint(0, len(directions) - 1)]
     loc = get_location()
@@ -75,24 +81,20 @@ def run_tower():
         for random_enemy in enemy_robots:
             loc2 = random_enemy.get_location()
             dist = (loc.x - loc2.x) ** 2 + (loc.y - loc2.y) ** 2
-            if(dist <= 18): #TODO: This part randomly returns out of range errors
+            if(dist <= 8): #TODO: This part randomly returns out of range errors
                 attack(loc2)
                 break
 
     # Pick a random robot type to build.
     # Should hold off on building since we're gonna end up with all moppers!
-    robot_type = random.randint(0, 2)
-    if robot_type == 0 and can_build_robot(UnitType.SOLDIER, next_loc):
-        build_robot(UnitType.SOLDIER, next_loc)
-        log("BUILT A SOLDIER")
-    if robot_type == 1 and can_build_robot(UnitType.MOPPER, next_loc):
-        build_robot(UnitType.MOPPER, next_loc)
-        log("BUILT A MOPPER")
-    if robot_type == 2 and can_build_robot(UnitType.SPLASHER, next_loc):
-        set_indicator_string("SPLASHER NOT IMPLEMENTED YET");
-        #build_robot(RobotType.SPLASHER, next_loc)
-        #log("BUILT A SPLASHER")
-
+    if buildCooldown <= 0: 
+        robot_type = get_random_unit(bot_chance)
+        if can_build_robot(robot_type, next_loc):
+            build_robot(robot_type, next_loc)
+            buildCooldown = buildDelay + random.randint(-buildDeviation, buildDeviation)
+            log("BUILT A " + bot_name[robot_type])
+    else: buildCooldown -= 1
+        
     # Read incoming messages
     messages = read_messages()
     for m in messages:
