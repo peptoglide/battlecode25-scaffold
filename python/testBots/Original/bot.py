@@ -1,5 +1,4 @@
 import random
-#Hello world guys lol
 
 from battlecode25.stubs import *
 
@@ -20,27 +19,6 @@ directions = [
     Direction.NORTHWEST,
 ]
 
-# Should add up to 100
-
-bot_chance = {UnitType.SOLDIER : 33, UnitType.MOPPER : 33, UnitType.SPLASHER : 34}
-tower_chance = {UnitType.LEVEL_ONE_MONEY_TOWER : 45, UnitType.LEVEL_ONE_PAINT_TOWER : 45, UnitType.LEVEL_ONE_DEFENSE_TOWER : 10}
-
-def update_bot_chance(soldier, mopper, splasher):
-    bot_chance[UnitType.SOLDIER] = soldier
-    bot_chance[UnitType.MOPPER] = mopper
-    bot_chance[UnitType.SPLASHER] = splasher
-
-def update_tower_chance(money, paint, defense):
-    tower_chance[UnitType.LEVEL_ONE_MONEY_TOWER] = money
-    tower_chance[UnitType.LEVEL_ONE_PAINT_TOWER] = paint
-    tower_chance[UnitType.LEVEL_ONE_DEFENSE_TOWER] = defense
-
-def get_random_unit(probabilities):
-    n = random.randint(1, 100)
-    for (unit, prob) in probabilities.items():
-        if n <= prob: return unit
-        n -= prob
-
 
 def turn():
     """
@@ -55,7 +33,7 @@ def turn():
     elif get_type() == UnitType.MOPPER:
         run_mopper()
     elif get_type() == UnitType.SPLASHER:
-        run_splasher()
+        pass  # TODO
     elif get_type().is_tower_type():
         run_tower()
     else:
@@ -65,22 +43,9 @@ def turn():
 def run_tower():
     # Pick a direction to build in.
     dir = directions[random.randint(0, len(directions) - 1)]
-    loc = get_location()
     next_loc = get_location().add(dir)
-    enemy_robots = sense_nearby_robots(team=get_team().opponent())
-
-    # Ability for towers to attack
-    if(is_action_ready() and len(enemy_robots) != 0):
-        # Pick a random target to attack
-        for random_enemy in enemy_robots:
-            loc2 = random_enemy.get_location()
-            dist = (loc.x - loc2.x) ** 2 + (loc.y - loc2.y) ** 2
-            if(dist <= 18): #TODO: This part randomly returns out of range errors
-                attack(loc2)
-                break
 
     # Pick a random robot type to build.
-    # Should hold off on building since we're gonna end up with all moppers!
     robot_type = random.randint(0, 2)
     if robot_type == 0 and can_build_robot(UnitType.SOLDIER, next_loc):
         build_robot(UnitType.SOLDIER, next_loc)
@@ -97,6 +62,8 @@ def run_tower():
     messages = read_messages()
     for m in messages:
         log(f"Tower received message: '#{m.get_sender_id()}: {m.get_bytes()}'")
+
+    # TODO: can we attack other bots?
 
 
 def run_soldier():
@@ -161,9 +128,6 @@ def run_mopper():
 
     # We can also move our code into different methods or classes to better organize it!
     update_enemy_robots()
-
-def run_splasher():
-    return
 
 
 def update_enemy_robots():

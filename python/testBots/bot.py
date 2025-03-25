@@ -65,22 +65,16 @@ def turn():
 def run_tower():
     # Pick a direction to build in.
     dir = directions[random.randint(0, len(directions) - 1)]
-    loc = get_location()
     next_loc = get_location().add(dir)
     enemy_robots = sense_nearby_robots(team=get_team().opponent())
 
     # Ability for towers to attack
-    if(is_action_ready() and len(enemy_robots) != 0):
+    if(is_action_ready):
         # Pick a random target to attack
-        for random_enemy in enemy_robots:
-            loc2 = random_enemy.get_location()
-            dist = (loc.x - loc2.x) ** 2 + (loc.y - loc2.y) ** 2
-            if(dist <= 18): #TODO: This part randomly returns out of range errors
-                attack(loc2)
-                break
+        random_enemy = random.choice(enemy_robots)
+        attack(random_enemy.get_location())
 
     # Pick a random robot type to build.
-    # Should hold off on building since we're gonna end up with all moppers!
     robot_type = random.randint(0, 2)
     if robot_type == 0 and can_build_robot(UnitType.SOLDIER, next_loc):
         build_robot(UnitType.SOLDIER, next_loc)
@@ -97,6 +91,8 @@ def run_tower():
     messages = read_messages()
     for m in messages:
         log(f"Tower received message: '#{m.get_sender_id()}: {m.get_bytes()}'")
+
+    # TODO: can we attack other bots?
 
 
 def run_soldier():
