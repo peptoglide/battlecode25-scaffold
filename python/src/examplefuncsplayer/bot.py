@@ -180,10 +180,12 @@ def run_soldier():
             if can_move(dir):
                 move(dir)
                 break
-            
+
     # If we can't find empty squares, go randomly
     if is_movement_ready():
         dir = directions[random.randint(0, len(directions) - 1)]
+        if can_move(dir):
+                move(dir)
 
     # Try to paint beneath us as we walk to avoid paint penalties.
     # Avoiding wasting paint by re-painting our own tiles.
