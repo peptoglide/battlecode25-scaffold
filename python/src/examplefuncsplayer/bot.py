@@ -176,12 +176,14 @@ def run_soldier():
     # Make sure we go to empty square
     for tile in nearby_tiles:
         if tile.get_paint() == PaintType.EMPTY:
-            dir = directions[random.randint(0, len(directions) - 1)]
-            next_loc = get_location().add(dir)
+            dir = get_location().direction_to(tile.get_map_location())
             if can_move(dir):
                 move(dir)
                 break
-    
+            
+    # If we can't find empty squares, go randomly
+    if is_movement_ready():
+        dir = directions[random.randint(0, len(directions) - 1)]
 
     # Try to paint beneath us as we walk to avoid paint penalties.
     # Avoiding wasting paint by re-painting our own tiles.
