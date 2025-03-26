@@ -43,9 +43,11 @@ def get_random_unit(probabilities):
         n -= prob
 
 # Determine build delays between each bot spawned by a tower
-buildDelay = 10 # Tune
+buildDelay = 15 # Tune
 buildDeviation = 3
 buildCooldown = 0
+
+tower_upgrade_threshold = 1
 
 def turn():
     """
@@ -107,9 +109,11 @@ def run_soldier():
 
     # Search for a nearby ruin to complete.
     cur_ruin = None
-    for tile in nearby_tiles:
-        if tile.has_ruin():
-            cur_ruin = tile
+    tower_type = None
+    if cur_ruin == None:
+        for tile in nearby_tiles:
+            if tile.has_ruin():
+                cur_ruin = tile
 
     if cur_ruin is not None:
         target_loc = cur_ruin.get_map_location()
@@ -117,10 +121,11 @@ def run_soldier():
         if can_move(dir):
             move(dir)
 
+        if tower_type == None: tower_type = get_random_unit(tower_chance)
         # Mark the pattern we need to draw to build a tower here if we haven't already.
         should_mark = cur_ruin.get_map_location().subtract(dir)
-        if sense_map_info(should_mark).get_mark() == PaintType.EMPTY and can_mark_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER, target_loc):
-            mark_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER, target_loc)
+        if sense_map_info(should_mark).get_mark() == PaintType.EMPTY and can_mark_tower_pattern(tower_type, target_loc):
+            mark_tower_pattern(tower_type, target_loc)
             log("Trying to build a tower at " + str(target_loc))
 
         # Fill in any spots in the pattern with the appropriate paint.
@@ -131,8 +136,10 @@ def run_soldier():
                     attack(pattern_tile.get_map_location(), use_secondary)
 
         # Complete the ruin if we can.
-        if can_complete_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER, target_loc):
-            complete_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER, target_loc)
+        if can_complete_tower_pattern(tower_type, target_loc):
+            complete_tower_pattern(tower_type, target_loc)
+            cur_ruin = None
+            tower_type = None
             set_timeline_marker("Tower built", 0, 255, 0)
             log("Built a tower at " + str(target_loc) + "!")
 
@@ -187,6 +194,29 @@ def run_splasher():
     next_loc = get_location().add(dir)
     if can_move(dir):
         move(dir)
+
+    # Get all tiles we're gonna paint over to avoid painting on marked tiles 
+    # Total splashed tiles = 13. We're gonna splash if 5+ tiles are splashable
+    if can_attack(next_loc):
+        loc = get_location()
+        see_primary = False
+        see_secondary = False
+        splashables = 0
+        painted_over = sense_nearby_map_infos(center=loc, radius_squared=4)
+        for tile in painted_over:
+            if tile.get_mark() == PaintType.ALLY_SECONDARY: 
+                see_secondary = True
+            elif tile.get_mark() == PaintType.ALLY_PRIMARY:
+                see_primary = True
+            if not tile.get_mark().is_ally(): splashables += 1
+        
+        if splashables >= 5:
+            if see_primary and see_secondary: # Impossible
+                pass
+            elif see_secondary: 
+                attack(loc, True)
+            else:
+                attack(loc, False)
 
 
 def update_enemy_robots():
