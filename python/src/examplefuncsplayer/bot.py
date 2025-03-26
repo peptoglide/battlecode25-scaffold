@@ -46,11 +46,11 @@ def get_random_unit(probabilities):
 
 # Statics
 # Determine build delays between each bot spawned by a tower
-buildDelay = 15 # Tune
-buildDeviation = 3
+buildDelay = 10 # Tune
+buildDeviation = 2
 tower_upgrade_threshold = 1
 # When we're trying to build, how long should we save
-save_turns = 70 # Tune
+save_turns = 65 # Tune
 
 # Privates
 buildCooldown = 0
@@ -173,11 +173,15 @@ def run_soldier():
             set_timeline_marker("Tower built", 0, 255, 0)
             log("Built a tower at " + str(target_loc) + "!")
 
-    # Move and attack randomly if no objective.
-    dir = directions[random.randint(0, len(directions) - 1)]
-    next_loc = get_location().add(dir)
-    if can_move(dir):
-        move(dir)
+    # Make sure we go to empty square
+    for tile in nearby_tiles:
+        if tile.get_paint() == PaintType.EMPTY:
+            dir = directions[random.randint(0, len(directions) - 1)]
+            next_loc = get_location().add(dir)
+            if can_move(dir):
+                move(dir)
+                break
+    
 
     # Try to paint beneath us as we walk to avoid paint penalties.
     # Avoiding wasting paint by re-painting our own tiles.
