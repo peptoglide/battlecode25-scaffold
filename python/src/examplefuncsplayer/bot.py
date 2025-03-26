@@ -73,7 +73,7 @@ def run_tower():
     dir = directions[random.randint(0, len(directions) - 1)]
     loc = get_location()
     next_loc = get_location().add(dir)
-    enemy_robots = sense_nearby_robots(team=get_team().opponent())
+    enemy_robots = sense_nearby_robots(center=get_location(),team=get_team().opponent())
 
     # Ability for towers to attack
     if(is_action_ready() and len(enemy_robots) != 0):
@@ -103,7 +103,7 @@ def run_tower():
 
 def run_soldier():
     # Sense information about all visible nearby tiles.
-    nearby_tiles = sense_nearby_map_infos()
+    nearby_tiles = sense_nearby_map_infos(center=get_location())
 
     # Search for a nearby ruin to complete.
     cur_ruin = None
@@ -153,19 +153,40 @@ def run_mopper():
     # Move and attack randomly.
     dir = directions[random.randint(0, len(directions) - 1)]
     next_loc = get_location().add(dir)
+    enemy_robots = sense_nearby_robots(center=get_location(),radius_squared=2, team=get_team().opponent())
+    nearby_tiles = sense_nearby_map_infos(center=get_location(),radius_squared=2)
+
     if can_move(dir):
         move(dir)
-    if can_mop_swing(dir):
-        mop_swing(dir)
-        log("Mop Swing! Booyah!");
-    elif can_attack(next_loc):
-        attack(next_loc)
+
+    attacked = False
+    # Only attacks when sees enemy
+    for enemy in enemy_robots:
+        target_loc = enemy.get_location()
+        swingDir = get_location().direction_to(target_loc)
+        if can_mop_swing(swingDir):
+            mop_swing(swingDir)
+            log("Mop Swing! Booyah!")
+            attacked = True
+            break
+        
+
+    if not attacked:
+        for tile in nearby_tiles:
+            if tile.get_paint() == PaintType.ENEMY_PRIMARY or tile.get_paint() == PaintType.ENEMY_SECONDARY:
+                mop_dir = get_location().direction_to(tile.get_map_location())
+                mop_loc = get_location().add(mop_dir)
+                if can_attack(mop_loc): attack(mop_loc)
+                break
 
     # We can also move our code into different methods or classes to better organize it!
     update_enemy_robots()
 
 def run_splasher():
-    return
+    dir = directions[random.randint(0, len(directions) - 1)]
+    next_loc = get_location().add(dir)
+    if can_move(dir):
+        move(dir)
 
 
 def update_enemy_robots():
