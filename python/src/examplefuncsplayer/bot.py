@@ -136,8 +136,8 @@ def get_random_unit(probabilities):
         n -= prob
 
 # Determine build delays between each bot spawned by a tower
-buildDelay = 15 # Tune
-buildDeviation = 3
+buildDelay = 11 # Tune
+buildDeviation = 2
 
 # When we're trying to build, how long should we save
 save_turns = 70 # Tune
