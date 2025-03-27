@@ -273,8 +273,10 @@ save_turns = 70 # Tune
 # How many turns after does a messenger repeats its tasks
 messenger_work_distribution = 25
 
-# How many turns after does a soldier senses ruins
-sense_ruins_delay = 15
+# How many turns after does a soldier senses towers
+sense_tower_delay = 15
+# The same for sensing ruins
+sense_ruin_delay = 4
 
 # Privates
 buildCooldown = 0
@@ -289,6 +291,9 @@ tower_upgrade_minimum = 10000
 closest_paint_tower = None
 
 tower_upgrade_threshold = 1
+
+def can_repeat_cooldowned_action(time_delay):
+    return (get_id() % time_delay == turn_count % time_delay)
 
 def turn():
     """
@@ -397,19 +402,21 @@ def run_soldier():
     tower_type = None
     dir = None
     cur_dist = 999999
-    for tile in nearby_tiles:
-        if tile.has_ruin() and sense_robot_at_location(tile.get_map_location()) == None:
-            check_dist = tile.get_map_location().distance_squared_to(get_location())
-            if check_dist < cur_dist:
-                cur_dist = check_dist
-                cur_ruin = tile
+    if can_repeat_cooldowned_action(sense_ruin_delay):
+        for tile in nearby_tiles:
+            if tile.has_ruin() and sense_robot_at_location(tile.get_map_location()) == None:
+                check_dist = tile.get_map_location().distance_squared_to(get_location())
+                if check_dist < cur_dist:
+                    cur_dist = check_dist
+                    cur_ruin = tile
 
 
     if cur_ruin is not None:
-        for tile2 in nearby_tiles:
-            if tile2.get_paint().is_enemy() and cur_ruin.get_map_location().distance_squared_to(tile2.get_map_location()) <= 8: 
-                cur_ruin = None
-                break
+        if can_repeat_cooldowned_action(sense_ruin_delay):
+            for tile2 in nearby_tiles:
+                if tile2.get_paint().is_enemy() and cur_ruin.get_map_location().distance_squared_to(tile2.get_map_location()) <= 8: 
+                    cur_ruin = None
+                    break
         if cur_ruin is not None:
             # Should circle around tower to be able to paint all tiles
             target_loc = cur_ruin.get_map_location()
@@ -438,12 +445,14 @@ def run_soldier():
                     log("Trying to build a tower at " + str(target_loc))
 
             # Fill in any spots in the pattern with the appropriate paint.
-            for pattern_tile in sense_nearby_map_infos(target_loc, 8):
+            for pattern_tile in nearby_tiles:
+                dst = target_loc.distance_squared_to(pattern_tile.get_map_location())
+                if dst > 8: continue
                 if pattern_tile.get_mark() != pattern_tile.get_paint() and pattern_tile.get_mark() != PaintType.EMPTY:
-                    use_secondary = pattern_tile.get_mark() == PaintType.ALLY_SECONDARY
+                    use_secondary = (pattern_tile.get_mark() == PaintType.ALLY_SECONDARY)
                     if can_attack(pattern_tile.get_map_location()):
                         attack(pattern_tile.get_map_location(), use_secondary)
-
+                
             # Complete the ruin if we can.
             if can_complete_tower_pattern(tower_type, target_loc):
                 complete_tower_pattern(tower_type, target_loc)
@@ -451,6 +460,7 @@ def run_soldier():
                 tower_type = None
                 set_timeline_marker("Tower built", 0, 255, 0)
                 log("Built a tower at " + str(target_loc) + "!")
+                
     # Make sure we go to empty square
     cur_dir = None
     cur_dist = 999999
@@ -464,7 +474,7 @@ def run_soldier():
     if cur_dir is not None and can_move(cur_dir): move(cur_dir)
 
     # Upgrade towers
-    if (get_id() % sense_ruins_delay == turn_count % sense_ruins_delay):
+    if can_repeat_cooldowned_action(sense_tower_delay):
         towers = sense_nearby_ruins()
         if get_chips() >= tower_upgrade_minimum:
             for ruins in towers:
