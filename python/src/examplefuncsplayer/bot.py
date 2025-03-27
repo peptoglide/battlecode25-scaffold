@@ -12,6 +12,7 @@ class MessageType(Enum):
     SAVE_CHIPS = 0
 
 # Globals
+
 turn_count = 0
 directions = [
     Direction.NORTH,
@@ -274,14 +275,18 @@ save_turns = 70 # Tune
 messenger_work_distribution = 25
 
 # How many turns after does a soldier senses towers
-sense_tower_delay = 15
+sense_tower_delay = 5
 # The same for sensing ruins
-sense_ruin_delay = 4
+sense_ruin_delay = 1
+# Threshold for returning to ruin (splashers)
+return_to_paint = {UnitType.SOLDIER : 0, UnitType.MOPPER : 0, UnitType.SPLASHER : 25}
+back_to_aggresion = {UnitType.SOLDIER : 75, UnitType.MOPPER : 50, UnitType.SPLASHER : 85}
 
 # Privates
 buildCooldown = 0
 is_messenger = False # We designate half of moppers to be messangers
 known_towers = []
+known_paint_towers = []
 should_save = False
 savingTurns = 0
 updated = 0
@@ -289,6 +294,7 @@ early_game = 150
 mid_game = 950
 tower_upgrade_minimum = 10000
 closest_paint_tower = None
+is_refilling = False
 
 tower_upgrade_threshold = 1
 
@@ -305,7 +311,8 @@ def turn():
     global is_messenger
     global updated
     global direction_distribution
-    turn_count += 1
+    # HOW DID NO ONE REALIZE TURN COUNT IS NOT COUNTING FROM THE START
+    turn_count = get_round_num()
 
     thisisavariableforchoosingmethodofrandomwalking = random.randint(1, 100)
     if direction_distribution[Direction.NORTH] == None:
@@ -454,13 +461,14 @@ def run_soldier():
                         attack(pattern_tile.get_map_location(), use_secondary)
                 
             # Complete the ruin if we can.
-            if can_complete_tower_pattern(tower_type, target_loc):
-                complete_tower_pattern(tower_type, target_loc)
-                cur_ruin = None
-                tower_type = None
-                set_timeline_marker("Tower built", 0, 255, 0)
-                log("Built a tower at " + str(target_loc) + "!")
-                
+            for Tower_type in UnitType:
+                if Tower_type.is_tower_type() and can_complete_tower_pattern(Tower_type, target_loc):
+                    complete_tower_pattern(Tower_type, target_loc)
+                    cur_ruin = None
+                    Tower_type = None
+                    set_timeline_marker("Tower built", 0, 255, 0)
+                    log("Built a tower at " + str(target_loc) + "!")
+
     # Make sure we go to empty square
     cur_dir = None
     cur_dist = 999999
@@ -548,47 +556,76 @@ def run_mopper():
 
 #TODO (LITERALLY THE BIGGEST TODO YET)
 def run_splasher():
+    global is_refilling
     # dir = directions[random.randint(0, len(directions) - 1)]
     # Prioritize where without ally paint
-    nearby_tiles = sense_nearby_map_infos(center=get_location())
-    cur_dir = None
-    cur_dist = 999999
-    for tile in nearby_tiles:
-        if not tile.is_wall() and not tile.get_paint().is_ally():
-            dst = get_location().distance_squared_to(tile.get_map_location())
-            if dst < cur_dist:
-                cur_dist = dst
-                cur_dir = get_location().direction_to(tile.get_map_location())
-    cur_dir = cur_dir if random.random() > 0.99 else get_random_dir() # Introduce some randomness
-    if cur_dir is not None and can_move(cur_dir): move(cur_dir)
-
-    dir = get_random_dir()
-    if can_move(dir):
-        move(dir)
-
-    # Get all tiles we're gonna paint over to avoid painting on marked tiles 
-    # Total splashed tiles = 13. We're gonna splash if 5+ tiles are splashable
-    if can_attack(get_location()):
-        loc = get_location()
-        see_primary = False
-        see_secondary = False
-        splashables = 0
-        for tile in nearby_tiles:
-            dst = loc.distance_squared_to(tile.get_map_location())
-            if dst > 4: continue
-            if tile.get_mark() == PaintType.ALLY_SECONDARY: 
-                see_secondary = True
-            elif tile.get_mark() == PaintType.ALLY_PRIMARY:
-                see_primary = True
-            if not tile.has_ruin() and not tile.is_wall() and not tile.get_mark().is_ally(): splashables += 1
-        
-        if splashables >= 5:
-            if see_primary and see_secondary: # Impossible
-                pass
-            elif see_secondary: 
-                attack(loc, False) # Why splash secondary??
+    # Splashers have max paint of 300
+    paint_percentage = get_paint() / 3
+    if len(known_paint_towers) == 0: run_aggresive_splasher()
+    else :
+        if not is_refilling and paint_percentage > return_to_paint[UnitType.SPLASHER]:
+            run_aggresive_splasher()
+        else:
+            if paint_percentage > back_to_aggresion[UnitType.SPLASHER]:
+                is_refilling = False
             else:
-                attack(loc, False)
+                tower_loc = known_paint_towers[0]
+                is_refilling = True
+                bug2(tower_loc)
+                if can_sense_location(tower_loc):
+                    paint_tower = sense_robot_at_location(tower_loc)
+                    if paint_tower == None:
+                        known_paint_towers.pop(0)
+                    elif can_transfer_paint(tower_loc, -25): transfer_paint(tower_loc, -25)
+
+def run_aggresive_splasher():
+        global known_paint_towers
+        nearby_tiles = sense_nearby_map_infos(center=get_location())
+        cur_dir = None
+        cur_dist = 999999
+        for tile in nearby_tiles:
+            # Save locations for paint towers
+            if tile.has_ruin():
+                tower = sense_robot_at_location(tile.get_map_location())
+                if tower is not None and tower.get_team() == get_team(): # Is ally tower
+                    if tower.get_type() in {UnitType.LEVEL_ONE_PAINT_TOWER, UnitType.LEVEL_TWO_PAINT_TOWER, UnitType.LEVEL_THREE_PAINT_TOWER}: # Is paint tower
+                        if tower.get_location() not in known_paint_towers:
+                            known_paint_towers.append(tower.get_location())
+            if not tile.is_wall() and not tile.get_paint().is_ally():
+                dst = get_location().distance_squared_to(tile.get_map_location())
+                if dst < cur_dist:
+                    cur_dist = dst
+                    cur_dir = get_location().direction_to(tile.get_map_location())
+        cur_dir = cur_dir if random.random() > 0.99 else get_random_dir() # Introduce some randomness
+        if cur_dir is not None and can_move(cur_dir): move(cur_dir)
+
+        dir = get_random_dir()
+        if can_move(dir):
+            move(dir)
+
+        # Get all tiles we're gonna paint over to avoid painting on marked tiles 
+        # Total splashed tiles = 13. We're gonna splash if 5+ tiles are splashable
+        if can_attack(get_location()):
+            loc = get_location()
+            see_primary = False
+            see_secondary = False
+            splashables = 0
+            for tile in nearby_tiles:
+                dst = loc.distance_squared_to(tile.get_map_location())
+                if dst > 4: continue
+                if tile.get_mark() == PaintType.ALLY_SECONDARY: 
+                    see_secondary = True
+                elif tile.get_mark() == PaintType.ALLY_PRIMARY:
+                    see_primary = True
+                if not tile.has_ruin() and not tile.is_wall() and not tile.get_mark().is_ally(): splashables += 1
+            
+            if splashables >= 13:
+                if see_primary and see_secondary: # Impossible
+                    pass
+                elif see_secondary: 
+                    attack(loc, False) # Why splash secondary??
+                else:
+                    attack(loc, False)
 
 def check_nearby_ruins():
     global should_save
