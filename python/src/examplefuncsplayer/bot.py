@@ -113,7 +113,7 @@ def bug2(target):
                 tracing_dir = tracing_dir.rotate_left()
 
 # Should add up to 100
-
+buildable_towers = [UnitType.LEVEL_ONE_MONEY_TOWER, UnitType.LEVEL_ONE_PAINT_TOWER, UnitType.LEVEL_ONE_DEFENSE_TOWER]
 bot_chance = {UnitType.SOLDIER : 40, UnitType.MOPPER : 25, UnitType.SPLASHER : 35}
 tower_chance = {UnitType.LEVEL_ONE_MONEY_TOWER : 65, UnitType.LEVEL_ONE_PAINT_TOWER : 25, UnitType.LEVEL_ONE_DEFENSE_TOWER : 10}
 bot_name = {UnitType.SOLDIER : "SOLDIER", UnitType.MOPPER : "MOPPER", UnitType.SPLASHER : "SPLASHER"}
@@ -461,7 +461,7 @@ def run_soldier():
                         attack(pattern_tile.get_map_location(), use_secondary)
                 
             # Complete the ruin if we can.
-            for Tower_type in UnitType:
+            for Tower_type in buildable_towers:
                 if Tower_type.is_tower_type() and can_complete_tower_pattern(Tower_type, target_loc):
                     complete_tower_pattern(Tower_type, target_loc)
                     cur_ruin = None
@@ -577,17 +577,32 @@ def run_splasher():
 def run_aggresive_splasher():
         global known_paint_towers
         nearby_tiles = sense_nearby_map_infos(center=get_location())
+
+        # Get all tiles we're gonna paint over to avoid painting on marked tiles 
+        # Total splashed tiles = 13. We're gonna splash if 5+ tiles are splashable
+        if can_attack(get_location()):
+            loc = get_location()
+            splashables = 0
+            for tile in nearby_tiles:
+                dst = loc.distance_squared_to(tile.get_map_location())
+                if dst > 4: continue
+                if (not tile.has_ruin()) and (not tile.is_wall()) and (not tile.get_paint().is_ally()): splashables += 1
+            
+            if splashables >= 5:
+               attack(loc, False)
+
+        # Prioritize moving to empty squares
         cur_dir = None
         cur_dist = 999999
         for tile in nearby_tiles:
             # Save locations for paint towers
             if tile.has_ruin():
                 tower = sense_robot_at_location(tile.get_map_location())
-                if tower is not None and tower.get_team() == get_team(): # Is ally tower
+                if (tower != None) and tower.get_team() == get_team(): # Is ally tower
                     if tower.get_type() in {UnitType.LEVEL_ONE_PAINT_TOWER, UnitType.LEVEL_TWO_PAINT_TOWER, UnitType.LEVEL_THREE_PAINT_TOWER}: # Is paint tower
-                        if tower.get_location() not in known_paint_towers:
+                        if not (tower.get_location() in known_paint_towers):
                             known_paint_towers.append(tower.get_location())
-            if not tile.is_wall() and not tile.get_paint().is_ally():
+            if (not tile.is_wall()) and (not tile.has_ruin()) and (not tile.get_paint().is_ally()):
                 dst = get_location().distance_squared_to(tile.get_map_location())
                 if dst < cur_dist:
                     cur_dist = dst
@@ -599,29 +614,6 @@ def run_aggresive_splasher():
         if can_move(dir):
             move(dir)
 
-        # Get all tiles we're gonna paint over to avoid painting on marked tiles 
-        # Total splashed tiles = 13. We're gonna splash if 5+ tiles are splashable
-        if can_attack(get_location()):
-            loc = get_location()
-            see_primary = False
-            see_secondary = False
-            splashables = 0
-            for tile in nearby_tiles:
-                dst = loc.distance_squared_to(tile.get_map_location())
-                if dst > 4: continue
-                if tile.get_mark() == PaintType.ALLY_SECONDARY: 
-                    see_secondary = True
-                elif tile.get_mark() == PaintType.ALLY_PRIMARY:
-                    see_primary = True
-                if not tile.has_ruin() and not tile.is_wall() and not tile.get_mark().is_ally(): splashables += 1
-            
-            if splashables >= 13:
-                if see_primary and see_secondary: # Impossible
-                    pass
-                elif see_secondary: 
-                    attack(loc, False) # Why splash secondary??
-                else:
-                    attack(loc, False)
         if can_repeat_cooldowned_action(sense_tower_delay):
             try_to_upgrade_towers()
 
