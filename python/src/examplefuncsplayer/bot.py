@@ -127,6 +127,67 @@ direction_distribution = {
     Direction.NORTHWEST: None,
 }
 
+CORRECT = 20
+SEMICORRECT = 16
+NEUTRAL = 12
+SEMIWRONG = 9
+WRONG = 6
+
+LEFT = {
+    Direction.NORTH : NEUTRAL,
+    Direction.NORTHEAST: SEMIWRONG,
+    Direction.EAST: WRONG,
+    Direction.SOUTHEAST: SEMIWRONG,
+    Direction.SOUTH: NEUTRAL,
+    Direction.SOUTHWEST: SEMICORRECT,
+    Direction.WEST: CORRECT,
+    Direction.NORTHWEST: SEMICORRECT,
+}
+
+RIGHT = {
+    Direction.NORTH : NEUTRAL,
+    Direction.NORTHEAST: SEMICORRECT,
+    Direction.EAST: CORRECT,
+    Direction.SOUTHEAST: SEMICORRECT,
+    Direction.SOUTH: NEUTRAL,
+    Direction.SOUTHWEST: SEMIWRONG,
+    Direction.WEST: WRONG,
+    Direction.NORTHWEST: SEMIWRONG,
+}
+
+DOWN = {
+    Direction.NORTH : WRONG,
+    Direction.NORTHEAST: SEMIWRONG,
+    Direction.EAST: NEUTRAL,
+    Direction.SOUTHEAST: SEMICORRECT,
+    Direction.SOUTH: CORRECT,
+    Direction.SOUTHWEST: SEMICORRECT,
+    Direction.WEST: NEUTRAL,
+    Direction.NORTHWEST: SEMIWRONG,
+}
+
+UP = {
+    Direction.NORTH : CORRECT,
+    Direction.NORTHEAST: SEMICORRECT,
+    Direction.EAST: NEUTRAL,
+    Direction.SOUTHEAST: SEMIWRONG,
+    Direction.SOUTH: WRONG,
+    Direction.SOUTHWEST: SEMIWRONG,
+    Direction.WEST: NEUTRAL,
+    Direction.NORTHWEST: SEMICORRECT,
+}
+
+UNIFORM = {
+    Direction.NORTH : NEUTRAL,
+    Direction.NORTHEAST: NEUTRAL+1,
+    Direction.EAST: NEUTRAL,
+    Direction.SOUTHEAST: NEUTRAL+1,
+    Direction.SOUTH: NEUTRAL,
+    Direction.SOUTHWEST: NEUTRAL+1,
+    Direction.WEST: NEUTRAL,
+    Direction.NORTHWEST: NEUTRAL+1,
+}
+
 def update_bot_chance(soldier, mopper, splasher):
     global bot_chance
     bot_chance[UnitType.SOLDIER] = soldier
@@ -167,6 +228,28 @@ def update_direction_distribution():
     direction_distribution[Direction.SOUTHWEST] = dl
     direction_distribution[Direction.WEST] = left
     direction_distribution[Direction.NORTHWEST] = ul
+
+def update_direction_distribution_2():
+    global direction_distribution
+    cur_loc = get_location()
+    left = cur_loc.x
+    right = get_map_width() - left - 1
+    down = cur_loc.y
+    up = get_map_height() - down - 1
+    if left <= 5: left = 0
+    if right <= 5: right = 0
+    if down <= 5: down = 0
+    if up <= 5: up = 0
+    total = left + right + up + down
+    temp = random.randint(1, total)
+    if temp <= left:
+        direction_distribution = LEFT
+    elif temp <= left + right:
+        direction_distribution = RIGHT
+    elif temp <= left + right + down:
+        direction_distribution = DOWN
+    else:
+        direction_distribution = UP
 
 def get_random_dir():
     n = random.randint(1, 100)
@@ -210,10 +293,17 @@ def turn():
     global is_messanger
     global is_messanger
     global updated
+    global direction_distribution
     turn_count += 1
 
+    thisisavariableforchoosingmethodofrandomwalking = random.randint(1, 100)
     if direction_distribution[Direction.NORTH] == None:
-        update_direction_distribution()
+        if thisisavariableforchoosingmethodofrandomwalking <= 15:
+            update_direction_distribution_2()
+        elif thisisavariableforchoosingmethodofrandomwalking <= 90:
+            update_direction_distribution()
+        else:
+            direction_distribution = UNIFORM
 
     # Prioritize chips in early game
     # Seems like chips are a bit too popular
@@ -381,14 +471,13 @@ def run_soldier():
 
     # If low on paint, go back
     # Else, go randomly
-    if (get_paint()/UnitType.SOLDIER.paint_capacity <= 0.2):
-        # bug2(closest_paint_tower)
-        pass
-    else:
-        # dir = directions[random.randint(0, len(directions) - 1)]
-        dir = get_random_dir()
-        if can_move(dir):
-            move(dir)
+    # if (get_paint()/UnitType.SOLDIER.paint_capacity <= 0.2):
+    #     bug2(closest_paint_tower)
+    # else:
+    # dir = directions[random.randint(0, len(directions) - 1)]
+    dir = get_random_dir()
+    if can_move(dir):
+        move(dir)
 
     # Try to paint beneath us as we walk to avoid paint penalties.
     # Avoiding wasting paint by re-painting our own tiles.
@@ -445,14 +534,26 @@ def run_mopper():
 #TODO (LITERALLY THE BIGGEST TODO YET)
 def run_splasher():
     # dir = directions[random.randint(0, len(directions) - 1)]
+    # Prioritize where without ally paint
+    nearby_tiles = sense_nearby_map_infos(center=get_location())
+    cur_dir = None
+    cur_dist = 999999
+    for tile in nearby_tiles:
+        if not tile.is_wall() and not tile.get_paint().is_ally():
+            dst = get_location().distance_squared_to(tile.get_map_location())
+            if dst < cur_dist:
+                cur_dist = dst
+                cur_dir = get_location().direction_to(tile.get_map_location())
+    cur_dir = cur_dir if random.random() > 0.99 else get_random_dir() # Introduce some randomness
+    if cur_dir is not None and can_move(cur_dir): move(cur_dir)
+
     dir = get_random_dir()
-    next_loc = get_location().add(dir)
     if can_move(dir):
         move(dir)
 
     # Get all tiles we're gonna paint over to avoid painting on marked tiles 
     # Total splashed tiles = 13. We're gonna splash if 5+ tiles are splashable
-    if can_attack(next_loc):
+    if can_attack(get_location()):
         loc = get_location()
         see_primary = False
         see_secondary = False
@@ -463,7 +564,7 @@ def run_splasher():
                 see_secondary = True
             elif tile.get_mark() == PaintType.ALLY_PRIMARY:
                 see_primary = True
-            if not tile.get_mark().is_ally(): splashables += 1
+            if not tile.has_ruin() and not tile.is_wall() and not tile.get_mark().is_ally(): splashables += 1
         
         if splashables >= 5:
             if see_primary and see_secondary: # Impossible
