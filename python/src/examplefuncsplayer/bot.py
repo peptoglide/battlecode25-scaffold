@@ -12,7 +12,6 @@ class MessageType(Enum):
     SAVE_CHIPS = 0
 
 # Globals
-
 turn_count = 0
 directions = [
     Direction.NORTH,
@@ -214,13 +213,25 @@ def update_direction_distribution():
     down = int(down/total*50)
     up = int(up/total*50)
     total = left+right+down+up
-    left += 50-total
+    leftover = 50-total
+    if left > right: left += leftover
+    else: right += leftover
     ul = (up + left)//2
     ur = (up + right)//2
     dl = (down + left)//2
     dr = (down + right)//2
     total = ul + ur + dl + dr
-    ur += 50-total
+    leftover = 50 - total
+    if left > right:
+        if up > down:
+            ul += leftover
+        else:
+            dl += leftover
+    else:
+        if up > down:
+            ur += leftover
+        else:
+            dr += leftover
     direction_distribution[Direction.NORTH] = up
     direction_distribution[Direction.NORTHEAST] = ur
     direction_distribution[Direction.EAST] = right
@@ -269,7 +280,7 @@ buildDelay = 15 # Tune
 buildDeviation = 3
 
 # When we're trying to build, how long should we save
-save_turns = 70 # Tune
+save_turns = 45 # Tune
 
 # How many turns after does a messenger repeats its tasks
 messenger_work_distribution = 25
@@ -295,7 +306,7 @@ mid_game = 950
 tower_upgrade_minimum = 10000
 closest_paint_tower = None
 is_refilling = False
-
+paintingSRP = False
 tower_upgrade_threshold = 1
 
 def can_repeat_cooldowned_action(time_delay):
@@ -326,7 +337,7 @@ def turn():
     # Prioritize chips in early game
     # Seems like chips are a bit too popular
     if turn_count >= 0 and updated == 0:
-        update_tower_chance(80, 20, 0)
+        update_tower_chance(70, 30, 0)
         update_bot_chance(65, 35, 0)
         updated = 1
     if turn_count >= early_game and updated == 1:
@@ -403,6 +414,38 @@ def run_tower():
 def run_soldier():
     # Sense information about all visible nearby tiles.
     nearby_tiles = sense_nearby_map_infos(center=get_location())
+    
+    global paintingSRP
+    if paintingSRP:
+        checks = sense_nearby_map_infos(center=get_location(), radius_squared=8)
+        for tiles in checks:
+            if tiles.get_paint() != tiles.get_mark():
+                if can_attack(tiles.get_map_location()):
+                    attack(tiles.get_map_location(), use_secondary_color=(tiles.get_mark() == PaintType.ALLY_SECONDARY))
+        if can_complete_resource_pattern(get_location()):
+            complete_resource_pattern(get_location())
+            log(f"Built a SRP at {get_location()}")
+            paintingSRP = False
+        return
+    if (turn_count > early_game and turn_count <= mid_game) or (turn_count > mid_game and random.randint(1, 100) <= 5):
+        # Checks in a square if all squares are empty
+        paintingSRP = True
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
+                tiles = MapLocation(get_location().x+dx, get_location().y+dy)
+                if not on_the_map(tiles):
+                    paintingSRP = False
+                    break
+                tiles = sense_map_info(tiles)
+                if tiles.get_mark() != PaintType.EMPTY or tiles.is_wall() or tiles.has_ruin():
+                    paintingSRP = False
+                    break
+        if paintingSRP:
+            if (can_mark_resource_pattern(get_location())):
+                mark_resource_pattern(get_location())
+                return
+            else:
+                paintingSRP = False
 
     # Search for a nearby ruin to complete.
     cur_ruin = None
@@ -459,16 +502,16 @@ def run_soldier():
                     use_secondary = (pattern_tile.get_mark() == PaintType.ALLY_SECONDARY)
                     if can_attack(pattern_tile.get_map_location()):
                         attack(pattern_tile.get_map_location(), use_secondary)
-                
-            # Complete the ruin if we can.
+
+             # Complete the ruin if we can.
             for Tower_type in buildable_towers:
                 if Tower_type.is_tower_type() and can_complete_tower_pattern(Tower_type, target_loc):
                     complete_tower_pattern(Tower_type, target_loc)
+                    # Maybe try to remove mark
                     cur_ruin = None
                     Tower_type = None
                     set_timeline_marker("Tower built", 0, 255, 0)
                     log("Built a tower at " + str(target_loc) + "!")
-
     # Make sure we go to empty square
     cur_dir = None
     cur_dist = 999999
