@@ -562,9 +562,6 @@ def run_mopper():
     # Move and attack randomly.
     # dir = directions[random.randint(0, len(directions) - 1)]
     dir = get_random_dir()
-    
-    
-
     if can_move(dir):
         move(dir)
 
@@ -637,7 +634,7 @@ def run_aggresive_splasher():
                 if dst > 4: continue
                 if (not tile.has_ruin()) and (not tile.is_wall()) and (not tile.get_paint().is_ally()): splashables += 1
             
-            if splashables >= 5:
+            if splashables >= 3:
                attack(loc, False)
 
         # Prioritize moving to empty squares
