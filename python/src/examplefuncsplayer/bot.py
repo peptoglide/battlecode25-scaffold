@@ -308,6 +308,7 @@ closest_paint_tower = None
 is_refilling = False
 paintingSRP = False
 tower_upgrade_threshold = 1
+next_spawn = UnitType.SOLDIER
 
 def can_repeat_cooldowned_action(time_delay):
     return (get_id() % time_delay == turn_count % time_delay)
@@ -338,15 +339,15 @@ def turn():
     # Seems like chips are a bit too popular
     if turn_count >= 0 and updated == 0:
         update_tower_chance(75, 25, 0)
-        update_bot_chance(50, 25, 25)
+        update_bot_chance(70, 15, 15)
         updated = 1
     if turn_count >= early_game and updated == 1:
         update_tower_chance(40, 55, 5)
-        update_bot_chance(45, 30, 25)
+        update_bot_chance(50, 20, 30)
         updated = 2
     if turn_count >= mid_game and updated == 2:
         update_tower_chance(40, 40, 20)
-        update_bot_chance(30, 35, 35)
+        update_bot_chance(50, 30, 20)
         updated = 3
     
 
@@ -366,6 +367,7 @@ def run_tower():
     global buildCooldown
     global savingTurns
     global should_save
+    global next_spawn
     # Pick a direction to build in.
     dir = get_random_dir()
     loc = get_location()
@@ -388,8 +390,10 @@ def run_tower():
         should_save = False
         if buildCooldown <= 0: 
             robot_type = get_random_unit(bot_chance)
+            robot_type = next_spawn
             if can_build_robot(robot_type, next_loc):
                 build_robot(robot_type, next_loc)
+                next_spawn = get_random_unit(bot_chance)
                 buildCooldown = buildDelay + random.randint(-buildDeviation, buildDeviation)
                 log("BUILT A " + bot_name[robot_type])
 
