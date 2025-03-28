@@ -319,7 +319,6 @@ def turn():
     """
     global turn_count
     global is_messenger
-    global is_messenger
     global updated
     global direction_distribution
     # HOW DID NO ONE REALIZE TURN COUNT IS NOT COUNTING FROM THE START
@@ -548,6 +547,7 @@ def run_soldier():
         attack(get_location())
 
 def run_mopper():
+    # If messenger, find towers to send messages
     if is_messenger:
         set_indicator_dot(get_location(), 255, 0, 0)
 
@@ -557,41 +557,53 @@ def run_mopper():
         set_indicator_string(f"Returning to {known_towers[0]}")
         if can_move(dir):
             move(dir)
+            
+    # Only attacks when sees enemy
+    if is_action_ready():
+        enemy_robots = sense_nearby_robots(center=get_location(),radius_squared=2, team=get_team().opponent())
+        for enemy in enemy_robots:
+            target_loc = enemy.get_location()
+            swingDir = get_location().direction_to(target_loc)
+            if can_mop_swing(swingDir):
+                mop_swing(swingDir)
+                log("Mop Swing! Booyah!")
+                break
 
-    # Move and attack randomly.
-    # dir = directions[random.randint(0, len(directions) - 1)]
+    # Movement, prioritize where enemy paint is
+    dir = None
+    cur_tile = None
+    cur_dist = 999999
+    if is_action_ready():
+        nearby_tiles = sense_nearby_map_infos(center=get_location())
+        for tile in nearby_tiles:
+            dst = get_location().distance_squared_to(tile.get_map_location())
+            if tile.get_paint().is_enemy():
+                if dst <= 2:
+                    mop_dir = get_location().direction_to(tile.get_map_location())
+                    mop_loc = get_location().add(mop_dir)
+                    if can_attack(mop_loc): 
+                        attack(mop_loc)
+                if dst < cur_dist: cur_tile = tile
+
+    if cur_tile != None:
+        if random.random() < 0.01: dir = get_random_dir()
+        else:
+            dir = get_location().direction_to(cur_tile.get_map_location())
+            if can_move(dir): move(dir)
+
+    # Random if no objective
     dir = get_random_dir()
-    enemy_robots = sense_nearby_robots(center=get_location(),radius_squared=2, team=get_team().opponent())
-    nearby_tiles = sense_nearby_map_infos(center=get_location(),radius_squared=2)
-
     if can_move(dir):
         move(dir)
-
-    # Only attacks when sees enemy
-    for enemy in enemy_robots:
-        target_loc = enemy.get_location()
-        swingDir = get_location().direction_to(target_loc)
-        if can_mop_swing(swingDir):
-            mop_swing(swingDir)
-            log("Mop Swing! Booyah!")
-            break
-
-    for tile in nearby_tiles:
-        if tile.get_paint() == PaintType.ENEMY_PRIMARY or tile.get_paint() == PaintType.ENEMY_SECONDARY:
-            mop_dir = get_location().direction_to(tile.get_map_location())
-            mop_loc = get_location().add(mop_dir)
-            if can_attack(mop_loc): 
-                attack(mop_loc)
-                break
-    will_do_messenger = (get_id() % messenger_work_distribution == turn_count % messenger_work_distribution) # Split the work over many turns
+        
+    will_do_messenger = can_repeat_cooldowned_action(messenger_work_distribution) # Split the work over many turns
     if will_do_messenger and is_messenger:
         check_nearby_ruins()
         update_friendly_towers()
 
     if can_repeat_cooldowned_action(sense_tower_delay):
         try_to_upgrade_towers()
-    # We can also move our code into different methods or classes to better organize it!
-    # update_enemy_robots()
+
 
 #TODO (LITERALLY THE BIGGEST TODO YET)
 def run_splasher():
