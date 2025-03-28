@@ -338,16 +338,16 @@ def turn():
     # Prioritize chips in early game
     # Seems like chips are a bit too popular
     if turn_count >= 0 and updated == 0:
-        update_tower_chance(75, 25, 0)
-        update_bot_chance(70, 15, 15)
+        update_tower_chance(70, 30, 0)
+        update_bot_chance(65, 35, 0)
         updated = 1
     if turn_count >= early_game and updated == 1:
         update_tower_chance(40, 55, 5)
-        update_bot_chance(50, 20, 30)
+        update_bot_chance(40, 40, 20)
         updated = 2
     if turn_count >= mid_game and updated == 2:
         update_tower_chance(40, 40, 20)
-        update_bot_chance(50, 30, 20)
+        update_bot_chance(30, 35, 35)
         updated = 3
     
 
@@ -579,6 +579,13 @@ def run_mopper():
                 mop_swing(swingDir)
                 log("Mop Swing! Booyah!")
                 break
+
+    # Finds other allies to transfer paint
+    if is_action_ready():
+        ally_robots = sense_nearby_robots(center=get_location(),radius_squared=2,team=get_team())
+        for ally in ally_robots:
+            ally_loc = ally.get_location()
+            if can_transfer_paint(ally_loc, 20): transfer_paint(ally_loc, 20)
 
     if is_action_ready():
         nearby_tiles = sense_nearby_map_infos(center=get_location(),radius_squared=2)
