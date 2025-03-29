@@ -23,6 +23,16 @@ directions = [
     Direction.WEST,
     Direction.NORTHWEST,
 ]
+direction_indices = {
+    Direction.NORTH : 0,
+    Direction.NORTHEAST : 1,
+    Direction.EAST : 2,
+    Direction.SOUTHEAST : 3,
+    Direction.SOUTH : 4,
+    Direction.SOUTHWEST : 5,
+    Direction.WEST : 6,
+    Direction.NORTHWEST : 7,
+}
 
 # Pathfinding
 prev_dest = MapLocation(100000, 100000)
@@ -329,7 +339,6 @@ def turn():
     """
     global turn_count
     global is_messenger
-    global is_messenger
     global updated
     global direction_distribution
     global explore, target_corner, explore_chance
@@ -395,7 +404,6 @@ def run_tower():
     global next_spawn
     # Pick a direction to build in.
     dir = get_random_dir()
-    loc = get_location()
     next_loc = get_location().add(dir)
     enemy_robots = sense_nearby_robots(center=get_location(),team=get_team().opponent())
 
@@ -404,7 +412,7 @@ def run_tower():
         # Pick a random target to attack
         for random_enemy in enemy_robots:
             loc2 = random_enemy.get_location()
-            if can_attack(random_enemy.get_location()):
+            if can_attack(loc2):
                 attack(loc2)
                 break
 
@@ -412,7 +420,7 @@ def run_tower():
     # Should hold off on building since we're gonna end up with all moppers!
     if savingTurns <= 0:
         should_save = False
-        if buildCooldown <= 0: 
+        if buildCooldown <= 0 and is_action_ready(): 
             robot_type = next_spawn
             if can_build_robot(robot_type, next_loc):
                 build_robot(robot_type, next_loc)
@@ -463,6 +471,7 @@ def run_soldier():
             log(f"Built a SRP at {get_location()}")
             paintingSRP = False
         return
+    
     if (turn_count > early_game and turn_count <= mid_game) or (turn_count > mid_game and random.randint(1, 100) <= 5):
         # Checks in a square if all squares are empty
         paintingSRP = can_SRP_here()
@@ -538,42 +547,64 @@ def run_soldier():
         attack(get_location())
 
 def run_mopper():
+    loc = get_location()
     if is_messenger:
-        set_indicator_dot(get_location(), 255, 0, 0)
+        set_indicator_dot(loc, 255, 0, 0)
 
     if should_save and len(known_towers) > 0:
         # Move to first known tower if we are saving
-        dir = get_location().direction_to(known_towers[0])
+        dir = loc.direction_to(known_towers[0])
         set_indicator_string(f"Returning to {known_towers[0]}")
         if can_move(dir):
             move(dir)
 
-    # Move and attack randomly.
-    # dir = directions[random.randint(0, len(directions) - 1)]
-    dir = get_random_dir()
-    enemy_robots = sense_nearby_robots(center=get_location(),radius_squared=2, team=get_team().opponent())
-    nearby_tiles = sense_nearby_map_infos(center=get_location(),radius_squared=2)
+    # Move and attack.
+    enemy_robots = sense_nearby_robots(radius_squared=2, team=get_team().opponent())
+    nearby_tiles = sense_nearby_map_infos(center=loc)
 
-    if can_move(dir):
-        move(dir)
+    dir_paint_count = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}
+    # Moppers should prioritize: cnt paint -> cnt enemy -> cnt ally. Each square has radius squared of 9
+    for tile in nearby_tiles:
+        dir = loc.direction_to(tile.get_map_location())
+        if not can_move(dir): continue
+        idx = direction_indices[dir]
+        if tile.get_paint().is_enemy(): 
+            dir_paint_count[idx] = dir_paint_count[idx] + 1
+
+    optimal_dir = -1
+    optimal = 0
+    for (test_dir, paint_count) in dir_paint_count.items():
+        if paint_count > optimal:
+            optimal = paint_count
+            optimal_dir = test_dir
+
+    if optimal_dir != -1:
+        move(directions[optimal_dir])
+    else:
+        dir = get_random_dir()
+        if can_move(dir): move(dir)
 
     # Only attacks when sees enemy
-    for enemy in enemy_robots:
-        target_loc = enemy.get_location()
-        swingDir = get_location().direction_to(target_loc)
-        if can_mop_swing(swingDir):
-            mop_swing(swingDir)
-            log("Mop Swing! Booyah!")
-            break
-
-    for tile in nearby_tiles:
-        if tile.get_paint() == PaintType.ENEMY_PRIMARY or tile.get_paint() == PaintType.ENEMY_SECONDARY:
-            mop_dir = get_location().direction_to(tile.get_map_location())
-            mop_loc = get_location().add(mop_dir)
-            if can_attack(mop_loc): 
-                attack(mop_loc)
+    if is_action_ready():
+        for enemy in enemy_robots:
+            target_loc = enemy.get_location()
+            swingDir = get_location().direction_to(target_loc)
+            if can_mop_swing(swingDir):
+                mop_swing(swingDir)
+                log("Mop Swing! Booyah!")
                 break
-    will_do_messenger = (get_id() % messenger_work_distribution == turn_count % messenger_work_distribution) # Split the work over many turns
+
+    if is_action_ready():
+        for tile in nearby_tiles:
+            if tile.get_map_location().distance_squared_to(loc) > 2: continue
+            if tile.get_paint() == PaintType.ENEMY_PRIMARY or tile.get_paint() == PaintType.ENEMY_SECONDARY:
+                mop_dir = get_location().direction_to(tile.get_map_location())
+                mop_loc = get_location().add(mop_dir)
+                if can_attack(mop_loc): 
+                    attack(mop_loc)
+                    break
+
+    will_do_messenger = can_repeat_cooldowned_action(messenger_work_distribution) # Split the work over many turns
     if will_do_messenger and is_messenger:
         check_nearby_ruins()
         update_friendly_towers()
@@ -689,29 +720,8 @@ def update_friendly_towers():
         known_towers.append(ally_loc)
         set_indicator_string(f"Found tower {ally.get_id()}")
 
-
-def update_enemy_robots():
-    # Sensing methods can be passed in a radius of -1 to automatically 
-    # use the largest possible value.
-    enemy_robots = sense_nearby_robots(team=get_team().opponent())
-    if len(enemy_robots) == 0:
-        return
-
-    set_indicator_string("There are nearby enemy robots! Scary!");
-
-    # Save an array of locations with enemy robots in them for possible future use.
-    enemy_locations = [None] * len(enemy_robots)
-    for i in range(len(enemy_robots)):
-        enemy_locations[i] = enemy_robots[i].get_location()
-
-    # Occasionally try to tell nearby allies how many enemy robots we see.
-    # if get_round_num() % 20 == 0:
-    #     for ally in ally_robots:
-    #         if can_send_message(ally.location):
-    #             send_message(ally.location, len(enemy_robots))
-
 def try_to_upgrade_towers():
-    towers = sense_nearby_ruins()
+    towers = sense_nearby_ruins(radius_squared=2)
     if get_chips() >= tower_upgrade_minimum:
         for ruins in towers:
             if can_upgrade_tower(ruins):
@@ -743,6 +753,7 @@ def valid_ruin(cur_ruin, nearby_tiles):
             if tile2.get_paint().is_enemy() and cur_ruin.get_map_location().distance_squared_to(tile2.get_map_location()) <= 8: 
                 return False
     return True
+    
 
 # For a given direction, find its next direction to make a circle
 def circle_around(dir):
@@ -756,6 +767,7 @@ def circle_around(dir):
     elif dir == Direction.SOUTHWEST: dir = Direction.SOUTH
     return dir
 
+# Try to mark tower pattern if possible at given ruin
 def try_mark_tower_pattern(cur_ruin, tower_type, dir):
     target_loc = cur_ruin.get_map_location()
     should_mark = target_loc.subtract(dir)
@@ -764,13 +776,16 @@ def try_mark_tower_pattern(cur_ruin, tower_type, dir):
             mark_tower_pattern(tower_type, target_loc)
             log("Trying to build a tower at " + str(target_loc))
 
+# Ensure marked squares are painted the right color if encountered
 def paint_nearby_marks(nearby_tiles):
+    if not is_action_ready(): return
     for pattern_tile in nearby_tiles:
         if pattern_tile.get_mark() != pattern_tile.get_paint() and pattern_tile.get_mark() != PaintType.EMPTY:
             use_secondary = (pattern_tile.get_mark() == PaintType.ALLY_SECONDARY)
             if can_attack(pattern_tile.get_map_location()):
                 attack(pattern_tile.get_map_location(), use_secondary)
 
+# Find a suitable tower type to complete
 def try_complete_tower_pattern(target_loc):
     for Tower_type in buildable_towers:
         if Tower_type.is_tower_type() and can_complete_tower_pattern(Tower_type, target_loc):
@@ -781,7 +796,9 @@ def try_complete_tower_pattern(target_loc):
             return True
     return False
 
+# Check whether we can build an SRP here. Returns false if one is already present
 def can_SRP_here():
+    correct_count = 0
     for dx in range(-2, 3):
         for dy in range(-2, 3):
             tiles = MapLocation(get_location().x+dx, get_location().y+dy)
@@ -792,4 +809,7 @@ def can_SRP_here():
                 return False
             if tile.get_paint().is_enemy() or ((tile.get_mark() == PaintType.ALLY_SECONDARY) != SRP[dx+2][dy+2] and tile.get_mark() != PaintType.EMPTY):
                 return False
-    return True
+            if tile.get_mark() != PaintType.EMPTY and tile.get_mark() == tile.get_paint(): correct_count += 1
+    return True if correct_count < 25 else False
+
+

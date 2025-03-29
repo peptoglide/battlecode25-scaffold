@@ -127,11 +127,11 @@ direction_distribution = {
     Direction.NORTHWEST: None,
 }
 
-CORRECT = 20
-SEMICORRECT = 16
-NEUTRAL = 12
-SEMIWRONG = 9
-WRONG = 6
+CORRECT = 23
+SEMICORRECT = 17
+NEUTRAL = 13
+SEMIWRONG = 7
+WRONG = 3
 
 LEFT = {
     Direction.NORTH : NEUTRAL,
@@ -200,6 +200,7 @@ def update_tower_chance(money, paint, defense):
     tower_chance[UnitType.LEVEL_ONE_PAINT_TOWER] = paint
     tower_chance[UnitType.LEVEL_ONE_DEFENSE_TOWER] = defense
 
+factor = 2
 def update_direction_distribution():
     global direction_distribution
     cur_loc = get_location()
@@ -207,6 +208,10 @@ def update_direction_distribution():
     right = get_map_width() - left - 1
     down = cur_loc.y
     up = get_map_height() - down - 1
+    left = left ** factor
+    right = right ** factor
+    up = up ** factor
+    down = down ** factor
     total = left+right+down+up
     left = int(left/total*50)
     right = int(right/total*50)
@@ -248,6 +253,10 @@ def update_direction_distribution_2():
     right = get_map_width() - left - 1
     down = cur_loc.y
     up = get_map_height() - down - 1
+    left = left ** factor
+    right = right ** factor
+    up = up ** factor
+    down = down ** factor
     if left <= 5: left = 0
     if right <= 5: right = 0
     if down <= 5: down = 0
@@ -305,9 +314,9 @@ known_paint_towers = []
 should_save = False
 savingTurns = 0
 updated = 0
-early_game = 150
-mid_game = 950
-tower_upgrade_minimum = 10000
+early_game = 200
+mid_game = 800
+tower_upgrade_minimum = 15000
 closest_paint_tower = None
 is_refilling = False
 paintingSRP = False
@@ -339,33 +348,33 @@ def turn():
     thisisavariableforchoosingmethodofrandomwalking = random.randint(1, 100)
     thisisavariableforchoosingexploringdirection = random.randint(1, 100)
     if direction_distribution[Direction.NORTH] == None:
-        if thisisavariableforchoosingmethodofrandomwalking <= 15:
+        if thisisavariableforchoosingmethodofrandomwalking <= 35:
             update_direction_distribution_2()
-        elif thisisavariableforchoosingmethodofrandomwalking <= 90:
+        elif thisisavariableforchoosingmethodofrandomwalking <= 95:
             update_direction_distribution()
         else:
             direction_distribution = UNIFORM
 
-        if thisisavariableforchoosingexploringdirection <= explore_chance:
-            target_corner = MapLocation(0, 0)
-        elif thisisavariableforchoosingexploringdirection <= explore_chance*2:
-            target_corner = MapLocation(get_map_width()-1, 0)
-        elif thisisavariableforchoosingexploringdirection <= explore_chance*3:
-            target_corner = MapLocation(0, get_map_height()-1)
-        elif thisisavariableforchoosingexploringdirection <= explore_chance*4:
-            target_corner = MapLocation(get_map_width()-1, get_map_height()-1)
-        if thisisavariableforchoosingexploringdirection <= explore_chance*4:
-            explore = random.randint(0, 100) # needs tuning
+        # if thisisavariableforchoosingexploringdirection <= explore_chance:
+        #     target_corner = MapLocation(0, 0)
+        # elif thisisavariableforchoosingexploringdirection <= explore_chance*2:
+        #     target_corner = MapLocation(get_map_width()-1, 0)
+        # elif thisisavariableforchoosingexploringdirection <= explore_chance*3:
+        #     target_corner = MapLocation(0, get_map_height()-1)
+        # elif thisisavariableforchoosingexploringdirection <= explore_chance*4:
+        #     target_corner = MapLocation(get_map_width()-1, get_map_height()-1)
+        # if thisisavariableforchoosingexploringdirection <= explore_chance*4:
+        #     explore = random.randint(0, 100) # needs tuning
 
     # Prioritize chips in early game
     # Seems like chips are a bit too popular
     if turn_count >= 0 and updated == 0:
-        update_tower_chance(70, 30, 0)
+        update_tower_chance(65, 35, 0)
         update_bot_chance(65, 35, 0)
         explore_chance = 20
         updated = 1
     if turn_count >= early_game and updated == 1:
-        update_tower_chance(40, 55, 5)
+        update_tower_chance(55, 40, 5)
         update_bot_chance(40, 40, 20)
         explore_chance = 10
         updated = 2
@@ -443,18 +452,26 @@ def run_soldier():
     global explore, paintingSRP
 
     # Try exploring?
-    if explore > 0 and (not paintingSRP):
-        bug2(target_corner)
-        if get_location().distance_squared_to(target_corner) <= 30:
-            explore = 1
-        explore -= 1
-    
-    if explore == 0:
-        update_direction_distribution()
-        explore -= 1
+    # if explore > 0 and (not paintingSRP):
+    #     bug2(target_corner)
+    #     if get_location().distance_squared_to(target_corner) <= 30:
+    #         explore = 1
+    #     explore -= 1
+    # 
+    # if explore == 0:
+    #     update_direction_distribution()
+    #     explore -= 1
 
     # Sense information about all visible nearby tiles.
     nearby_tiles = sense_nearby_map_infos(center=get_location())
+
+    for tile in nearby_tiles:
+        tile_loc = tile.get_map_location()
+        ruin = sense_robot_at_location(tile_loc)
+        if tile.has_ruin() and ruin != None:
+            if ruin.get_team() != get_team():
+                if can_attack(tile_loc):
+                    attack(tile_loc)
 
     if paintingSRP:
         paint_nearby_marks(nearby_tiles)
@@ -592,7 +609,7 @@ def run_splasher():
     # Splashers have max paint of 300
     paint_percentage = get_paint() / 3
     if len(known_paint_towers) == 0: run_aggresive_splasher()
-    else :
+    else:
         if not is_refilling and paint_percentage > return_to_paint[UnitType.SPLASHER]:
             run_aggresive_splasher()
         else:
@@ -800,5 +817,3 @@ def can_SRP_here():
                 return False
             if tile.get_mark() != PaintType.EMPTY and tile.get_mark() == tile.get_paint(): correct_count += 1
     return True if correct_count < 25 else False
-
-
