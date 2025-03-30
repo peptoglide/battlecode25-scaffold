@@ -306,6 +306,7 @@ messenger_work_distribution = 25
 
 # How many turns after does a soldier senses towers
 sense_tower_delay = 10
+
 # Threshold for returning to ruin (splashers)
 return_to_paint = {UnitType.SOLDIER : 0, UnitType.MOPPER : 0, UnitType.SPLASHER : 25}
 back_to_aggresion = {UnitType.SOLDIER : 75, UnitType.MOPPER : 50, UnitType.SPLASHER : 85}
@@ -409,6 +410,7 @@ def turn():
     if not get_type().is_tower_type():
         if get_paint() == 0:
             disintegrate() # WASTING TOO MUCH RESOURCES
+
     if get_type() == UnitType.SOLDIER:
         run_soldier()
     elif get_type() == UnitType.MOPPER:
@@ -786,9 +788,8 @@ def update_friendly_towers():
         known_towers.append(ally_loc)
         set_indicator_string(f"Found tower {ally.get_id()}")
 
-
 def try_to_upgrade_towers():
-    towers = sense_nearby_ruins(radius_squared=2)
+    towers = sense_nearby_ruins()
     if get_chips() >= tower_upgrade_minimum:
         for ruins in towers:
             if can_upgrade_tower(ruins):
@@ -812,6 +813,7 @@ def try_refill_paint(paint_percentage, unitType):
             if paint_tower == None:
                 known_paint_towers.pop(0)
             elif can_transfer_paint(tower_loc, -paint_per_transfer): transfer_paint(tower_loc, -paint_per_transfer)
+
 
 # Ensure marked squares are painted the right color if encountered
 def paint_nearby_marks():
