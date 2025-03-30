@@ -512,12 +512,19 @@ def run_soldier():
     cur_dist = 999999
     cur_dir = None
     cur_dist2 = 999999
+    dir_paint_count = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}
     for tile in nearby_tiles:
         tile_loc = tile.get_map_location()
         if tile.has_ruin():
             ruin = sense_robot_at_location(tile_loc)
-            if ruin != None and ruin.get_team() != get_team() and can_attack(tile_loc): # If enemy tower, attack
-                attack(tile_loc)
+            if ruin != None and ruin.get_team() != get_team(): # If enemy tower, attack
+                if can_attack(tile_loc):
+                    attack(tile_loc)
+                dir = loc.direction_to(tile_loc)
+                if not can_move(dir): continue
+                dst = loc.distance_squared_to(tile_loc)
+                idx = direction_indices[dir]
+                dir_paint_count[idx] = dir_paint_count[idx] + 100
             elif ruin == None: # If not enemy tower, try to complete
                 check_dist = tile_loc.distance_squared_to(loc)
                 if check_dist < cur_dist:
@@ -525,6 +532,10 @@ def run_soldier():
                     cur_ruin = tile
         elif not tile.is_wall() and tile.get_paint() == PaintType.EMPTY:
             dir = loc.direction_to(tile_loc)
+            if not can_move(dir): continue
+            dst = loc.distance_squared_to(tile_loc)
+            idx = direction_indices[dir]
+            dir_paint_count[idx] = dir_paint_count[idx] + 1/dst/dst/dst/dst
             dst = loc.distance_squared_to(tile_loc)
             if can_move(dir) and dst < cur_dist2:
                 cur_dist2 = dst
@@ -602,7 +613,17 @@ def run_soldier():
         try_to_upgrade_towers()
 
     # Make sure we go to empty square
-    if cur_dir is not None and can_move(cur_dir): move(cur_dir)
+    optimal_dir = -1
+    optimal = 0
+    for (test_dir, paint_count) in dir_paint_count.items():
+        if paint_count > optimal:
+            optimal = paint_count
+            optimal_dir = test_dir
+
+    if optimal_dir != -1:
+        cur_dir = directions[optimal_dir]
+        if can_move(cur_dir): move(cur_dir)
+
     dir = get_random_dir()
     if can_move(dir):
         move(dir)
