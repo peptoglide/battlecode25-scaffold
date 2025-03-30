@@ -713,19 +713,25 @@ def run_aggresive_splasher():
     loc = get_location()
     # Get all tiles we're gonna paint over to avoid painting on marked tiles 
     # Total splashed tiles = 13. We're gonna splash if splash_threshold+ tiles are splashable
+    to_attack = None
+    best_splash = splash_threshold
     if is_action_ready():
-        if can_attack(loc):
+        attackable_tiles = get_all_locations_within_radius_squared(center=loc, radius_squared=4)
+        for tile in attackable_tiles:
+            if not can_attack(loc): continue
+            local_nearby_tiles = sense_nearby_map_infos(center=tile, radius_squared=4)
             splashables = 0
-            for tile in nearby_tiles:
-                dst = loc.distance_squared_to(tile.get_map_location())
-                if dst > 4: continue
-                if dst > 2: # Can't override
-                    if (not tile.has_ruin()) and (not tile.is_wall()) and (tile.get_paint() == PaintType.EMPTY): splashables += 1
+            for splashed in local_nearby_tiles:
+                dst = tile.distance_squared_to(splashed.get_map_location())
+                if dst > 2:
+                    if (not splashed.has_ruin()) and (not splashed.is_wall()) and (splashed.get_paint() == PaintType.EMPTY): splashables += 1
                 else:
-                    if (not tile.has_ruin()) and (not tile.is_wall()) and (not tile.get_paint().is_ally()): splashables += 1
+                    if (not splashed.has_ruin()) and (not splashed.is_wall()) and (not splashed.get_paint().is_ally()): splashables += 1
+            if splashables >= best_splash: 
+                best_splash = splashables
+                to_attack = tile
             
-            if splashables >= splash_threshold:
-                attack(loc, False)
+        if can_attack(to_attack): attack(to_attack)
 
     # Prioritize moving to empty squares
     dir_paint_count = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}
@@ -744,6 +750,7 @@ def run_aggresive_splasher():
             idx = direction_indices[dir]
             if not tile.is_wall() and not tile.get_paint().is_ally(): 
                 dir_paint_count[idx] = dir_paint_count[idx] + 25
+                
     nearby_robots = sense_nearby_robots(center=loc)
     for robot in nearby_robots:
         robot_loc = robot.get_location()
@@ -847,6 +854,7 @@ def try_refill_paint(paint_percentage, unitType):
 def paint_nearby_marks():
     if not is_action_ready(): return
     for pattern_tile in nearby_tiles:
+        if pattern_tile.get_paint().is_enemy(): continue
         if pattern_tile.get_mark() != pattern_tile.get_paint() and pattern_tile.get_mark() != PaintType.EMPTY:
             use_secondary = (pattern_tile.get_mark() == PaintType.ALLY_SECONDARY)
             if can_attack(pattern_tile.get_map_location()):
