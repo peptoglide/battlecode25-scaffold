@@ -788,8 +788,9 @@ def update_friendly_towers():
         known_towers.append(ally_loc)
         set_indicator_string(f"Found tower {ally.get_id()}")
 
+
 def try_to_upgrade_towers():
-    towers = sense_nearby_ruins()
+    towers = sense_nearby_ruins(radius_squared=2)
     if get_chips() >= tower_upgrade_minimum:
         for ruins in towers:
             if can_upgrade_tower(ruins):
@@ -813,7 +814,6 @@ def try_refill_paint(paint_percentage, unitType):
             if paint_tower == None:
                 known_paint_towers.pop(0)
             elif can_transfer_paint(tower_loc, -paint_per_transfer): transfer_paint(tower_loc, -paint_per_transfer)
-
 
 # Ensure marked squares are painted the right color if encountered
 def paint_nearby_marks():
