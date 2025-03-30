@@ -651,6 +651,12 @@ def run_mopper():
                 log("Mop Swing! Booyah!")
                 break
 
+        # Finds other allies to transfer paint
+        ally_robots = sense_nearby_robots(center=get_location(),radius_squared=2,team=get_team())
+        for ally in ally_robots:
+            ally_loc = ally.get_location()
+            if can_transfer_paint(ally_loc, 20): transfer_paint(ally_loc, 20)
+
     if can_move(dir):
         move(dir)
 
