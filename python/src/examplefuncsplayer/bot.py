@@ -360,7 +360,6 @@ def turn():
     turn_count = get_round_num()
 
     thisisavariableforchoosingmethodofrandomwalking = random.randint(1, 100)
-    thisisavariableforchoosingexploringdirection = random.randint(1, 100)
     if direction_distribution[Direction.NORTH] == None:
         if thisisavariableforchoosingmethodofrandomwalking <= 35:
             update_direction_distribution_2()
@@ -369,16 +368,7 @@ def turn():
         else:
             direction_distribution = UNIFORM
 
-        # if thisisavariableforchoosingexploringdirection <= explore_chance:
-        #     target_corner = MapLocation(0, 0)
-        # elif thisisavariableforchoosingexploringdirection <= explore_chance*2:
-        #     target_corner = MapLocation(get_map_width()-1, 0)
-        # elif thisisavariableforchoosingexploringdirection <= explore_chance*3:
-        #     target_corner = MapLocation(0, get_map_height()-1)
-        # elif thisisavariableforchoosingexploringdirection <= explore_chance*4:
-        #     target_corner = MapLocation(get_map_width()-1, get_map_height()-1)
-        # if thisisavariableforchoosingexploringdirection <= explore_chance*4:
-        #     explore = random.randint(0, 100) # needs tuning
+    update_phases()
 
     # Prioritize chips in early game
     # Seems like chips are a bit too popular
@@ -395,7 +385,7 @@ def turn():
         is_mid_game = True
         is_late_game = False
         update_tower_chance(55, 40, 5)
-        update_bot_chance(50, 20, 30)
+        update_bot_chance(45, 5, 50)
         explore_chance = 10
         updated = 2
     if turn_count >= mid_game and updated == 2:
@@ -403,7 +393,7 @@ def turn():
         is_mid_game = False
         is_late_game = True
         update_tower_chance(40, 40, 20)
-        update_bot_chance(40, 25, 35)
+        update_bot_chance(35, 0, 65)
         explore_chance = 0
         updated = 3
 
@@ -429,14 +419,14 @@ def update_phases():
     global mid_game
     game_area = get_map_height() * get_map_width()
     if game_area >= 400 and game_area < 1225: 
-        early_game = 45
-        mid_game = 450
+        early_game = 50
+        mid_game = 500
     elif game_area < 2115: 
-        early_game = 90
-        mid_game = 700
+        early_game = 125
+        mid_game = 675
     else:
-        early_game = 140
-        mid_game = 950
+        early_game = 200
+        mid_game = 850
 
 def run_tower():
     global buildCooldown
@@ -493,16 +483,6 @@ def run_soldier():
     global explore, paintingSRP
     global nearby_tiles
     loc = get_location()
-    # Try exploring?
-    # if explore > 0 and (not paintingSRP):
-    #     bug2(target_corner)
-    #     if get_location().distance_squared_to(target_corner) <= 30:
-    #         explore = 1
-    #     explore -= 1
-    # 
-    # if explore == 0:
-    #     update_direction_distribution()
-    #     explore -= 1
 
     # Sense information about all visible nearby tiles.
     nearby_tiles = sense_nearby_map_infos(center=loc)
