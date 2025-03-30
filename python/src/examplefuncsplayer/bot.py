@@ -556,34 +556,6 @@ def run_soldier():
         if cur_ruin != None:
             # Should circle around tower to be able to paint all tiles
             target_loc = cur_ruin.get_map_location()
-            dir = loc.direction_to(target_loc)
-            if can_move(dir):
-                move(dir)
-            else:
-                # Circle to be able to color every tile
-                if dir == Direction.SOUTH: dir = Direction.EAST
-                elif dir == Direction.EAST: dir = Direction.NORTH
-                elif dir == Direction.NORTH: dir = Direction.WEST
-                elif dir == Direction.WEST: dir = Direction.SOUTH
-                elif dir == Direction.SOUTHEAST: dir = Direction.EAST
-                elif dir == Direction.NORTHEAST: dir = Direction.NORTH
-                elif dir == Direction.NORTHWEST: dir = Direction.WEST
-                elif dir == Direction.SOUTHWEST: dir = Direction.SOUTH
-                if can_move(dir):
-                    move(dir)
-
-            tower_type = get_random_unit(tower_chance)
-            # Mark the pattern we need to draw to build a tower here if we haven't already.
-            target_loc = cur_ruin.get_map_location()
-            should_mark = target_loc.subtract(dir)
-            if can_sense_location(should_mark):
-                if sense_map_info(should_mark).get_mark() == PaintType.EMPTY and can_mark_tower_pattern(tower_type, target_loc):
-                    mark_tower_pattern(tower_type, target_loc)
-                    log("Trying to build a tower at " + str(target_loc))
-
-            # Fill in any spots in the pattern with the appropriate paint.
-            paint_nearby_marks()
-
             # Complete the ruin if we can.
             for Tower_type in buildable_towers:
                 if Tower_type.is_tower_type() and can_complete_tower_pattern(Tower_type, target_loc):
@@ -592,6 +564,35 @@ def run_soldier():
                     set_timeline_marker("Tower built", 0, 255, 0)
                     log("Built a tower at " + str(target_loc) + "!")
                     cur_ruin = None
+            if cur_ruin != None:
+                dir = loc.direction_to(target_loc)
+                if can_move(dir):
+                    move(dir)
+                else:
+                    # Circle to be able to color every tile
+                    if dir == Direction.SOUTH: dir = Direction.EAST
+                    elif dir == Direction.EAST: dir = Direction.NORTH
+                    elif dir == Direction.NORTH: dir = Direction.WEST
+                    elif dir == Direction.WEST: dir = Direction.SOUTH
+                    elif dir == Direction.SOUTHEAST: dir = Direction.EAST
+                    elif dir == Direction.NORTHEAST: dir = Direction.NORTH
+                    elif dir == Direction.NORTHWEST: dir = Direction.WEST
+                    elif dir == Direction.SOUTHWEST: dir = Direction.SOUTH
+                    if can_move(dir):
+                        move(dir)
+
+                tower_type = get_random_unit(tower_chance)
+                # Mark the pattern we need to draw to build a tower here if we haven't already.
+                target_loc = cur_ruin.get_map_location()
+                should_mark = target_loc.subtract(dir)
+                if can_sense_location(should_mark):
+                    if sense_map_info(should_mark).get_mark() == PaintType.EMPTY and can_mark_tower_pattern(tower_type, target_loc):
+                        mark_tower_pattern(tower_type, target_loc)
+                        log("Trying to build a tower at " + str(target_loc))
+
+                # Fill in any spots in the pattern with the appropriate paint.
+                paint_nearby_marks()
+
 
     # Fill in any spots in the pattern with the appropriate paint.
     paint_nearby_marks()
