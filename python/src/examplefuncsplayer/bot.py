@@ -387,7 +387,7 @@ def turn():
         update_bot_chance(90, 5, 5)
         explore_chance = 20
         updated = 1
-        buildDelay = 12
+        buildDelay = 9
     if turn_count >= early_game and updated == 1:
         is_early_game = False
         is_mid_game = True
@@ -430,15 +430,15 @@ def update_phases():
     global mid_game
     game_area = get_map_height() * get_map_width()
     if game_area >= 400 and game_area < 1225: 
-        early_game = 35
+        early_game = 25
         mid_game = 500
         non_painting_turns = 45
     elif game_area < 2115: 
-        early_game = 55
+        early_game = 45
         mid_game = 675
         non_painting_turns = 65
     else:
-        early_game = 85
+        early_game = 75
         mid_game = 850
         non_painting_turns = 95
 
