@@ -314,6 +314,8 @@ back_to_aggresion = {UnitType.SOLDIER : 75, UnitType.MOPPER : 50, UnitType.SPLAS
 paint_per_transfer = 50
 # Min splashable squares to attack
 splash_threshold = 5
+# Duration of starting turns we don't paint
+non_painting_turns = 25
 
 # Privates
 buildCooldown = 0
@@ -339,6 +341,8 @@ is_early_game = False
 is_mid_game = False
 is_late_game = False
 nearby_tiles = []
+const_dir = None
+non_painting = non_painting_turns
 SRP = get_resource_pattern()
 
 def can_repeat_cooldowned_action(time_delay):
@@ -356,6 +360,8 @@ def turn():
     global buildDelay
     global explore, target_corner, explore_chance
     global is_early_game, is_mid_game, is_late_game
+    global non_painting_turns
+    global non_painting
     # HOW DID NO ONE REALIZE TURN COUNT IS NOT COUNTING FROM THE START
     turn_count = get_round_num()
 
@@ -368,11 +374,12 @@ def turn():
         else:
             direction_distribution = UNIFORM
 
-    update_phases()
+    
 
     # Prioritize chips in early game
     # Seems like chips are a bit too popular
     if turn_count >= 0 and updated == 0:
+        update_phases()
         is_early_game = True
         is_mid_game = False
         is_late_game = False
@@ -380,6 +387,7 @@ def turn():
         update_bot_chance(90, 5, 5)
         explore_chance = 20
         updated = 1
+        buildDelay = 12
     if turn_count >= early_game and updated == 1:
         is_early_game = False
         is_mid_game = True
@@ -388,6 +396,7 @@ def turn():
         update_bot_chance(45, 5, 50)
         explore_chance = 10
         updated = 2
+        buildDelay = 15
     if turn_count >= mid_game and updated == 2:
         is_early_game = False
         is_mid_game = False
@@ -413,25 +422,32 @@ def turn():
     else:
         pass  # Other robot types?
 
+    non_painting = non_painting_turns - turn_count
+
 def update_phases():
     global early_game
+    global non_painting_turns
     global mid_game
     game_area = get_map_height() * get_map_width()
     if game_area >= 400 and game_area < 1225: 
-        early_game = 50
+        early_game = 35
         mid_game = 500
+        non_painting_turns = 45
     elif game_area < 2115: 
-        early_game = 125
+        early_game = 55
         mid_game = 675
+        non_painting_turns = 65
     else:
-        early_game = 200
+        early_game = 85
         mid_game = 850
+        non_painting_turns = 95
 
 def run_tower():
     global buildCooldown
     global savingTurns
     global should_save
     global next_spawn
+    
     # Pick a direction to build in.
     dir = get_random_dir()
     loc = get_location()
@@ -477,12 +493,13 @@ def run_tower():
             savingTurns = save_turns
             should_save = True
 
-
+    
     # TODO: can we attack other bots?
 
 def run_soldier():
     global explore, paintingSRP
     global nearby_tiles
+    global const_dir
     loc = get_location()
 
     # Sense information about all visible nearby tiles.
@@ -594,28 +611,48 @@ def run_soldier():
         try_to_upgrade_towers()
 
     # Make sure we go to empty square
-    optimal_dir = -1
-    optimal = 0
-    for (test_dir, paint_count) in dir_paint_count.items():
-        if paint_count > optimal:
-            optimal = paint_count
-            optimal_dir = test_dir
+    # While exploring, move in one direction till impossible
+    if non_painting > 0:
+        if const_dir == None:
+            const_dir = get_random_dir()
+        if not can_move(const_dir):
+            const_dir = get_random_dir()
+        if can_move(const_dir):
+            move(const_dir)
+    else:
+        optimal_dir = -1
+        optimal = 0
+        for (test_dir, paint_count) in dir_paint_count.items():
+            if paint_count > optimal:
+                optimal = paint_count
+                optimal_dir = test_dir
 
-    if optimal_dir != -1:
-        cur_dir = directions[optimal_dir]
-        if can_move(cur_dir): move(cur_dir)
+        if optimal_dir != -1:
+            cur_dir = directions[optimal_dir]
+            if can_move(cur_dir): move(cur_dir)
 
-    dir = get_random_dir()
-    if can_move(dir):
-        move(dir)
+        dir = get_random_dir()
+        if can_move(dir):
+            move(dir)
 
     loc = get_location()
 
     # Try to paint beneath us as we walk to avoid paint penalties.
     # Avoiding wasting paint by re-painting our own tiles.
-    current_tile = sense_map_info(loc)
-    if is_action_ready() and not current_tile.get_paint().is_ally() and can_attack(loc):
-        attack(loc)
+    nearest_tile = None
+    nearest_dst = 999999
+    if non_painting <= 0 and is_action_ready():
+        for tile in nearby_tiles:
+            tile_loc = tile.get_map_location()
+            if not can_attack(tile_loc) or tile.get_paint() != PaintType.EMPTY: continue
+            dst = loc.distance_squared_to(tile_loc)
+            if dst < nearest_dst:
+                nearest_dst = dst
+                nearest_tile = tile
+        if nearest_tile != None:
+            nearest_tile_loc = nearest_tile.get_map_location()
+            if can_attack(nearest_tile_loc):
+                attack(nearest_tile_loc)
 
 def run_mopper():
     global nearby_tiles
@@ -653,7 +690,7 @@ def run_mopper():
         if paint.is_enemy():
             dir_priority[dir] = dir_priority[dir] + 500 / dst / dst / dst / dst  # 1st priority: enemy paint
             detect_nearby_enemy_paint = True
-            
+
     if not detect_nearby_enemy_paint:
         for enemy in enemy_robots:
             dir = loc.direction_to(enemy.get_location())
