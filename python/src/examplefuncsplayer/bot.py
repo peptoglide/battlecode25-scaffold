@@ -313,7 +313,7 @@ back_to_aggresion = {UnitType.SOLDIER : 75, UnitType.MOPPER : 50, UnitType.SPLAS
 # Paint per transfer
 paint_per_transfer = 50
 # Min splashable squares to attack
-splash_threshold = 2
+splash_threshold = 5
 
 # Privates
 buildCooldown = 0

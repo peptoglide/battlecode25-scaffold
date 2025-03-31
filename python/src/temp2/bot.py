@@ -313,7 +313,7 @@ back_to_aggresion = {UnitType.SOLDIER : 75, UnitType.MOPPER : 50, UnitType.SPLAS
 # Paint per transfer
 paint_per_transfer = 50
 # Min splashable squares to attack
-splash_threshold = 2
+splash_threshold = 5
 
 # Privates
 buildCooldown = 0
@@ -360,7 +360,6 @@ def turn():
     turn_count = get_round_num()
 
     thisisavariableforchoosingmethodofrandomwalking = random.randint(1, 100)
-    thisisavariableforchoosingexploringdirection = random.randint(1, 100)
     if direction_distribution[Direction.NORTH] == None:
         if thisisavariableforchoosingmethodofrandomwalking <= 35:
             update_direction_distribution_2()
@@ -369,16 +368,7 @@ def turn():
         else:
             direction_distribution = UNIFORM
 
-        # if thisisavariableforchoosingexploringdirection <= explore_chance:
-        #     target_corner = MapLocation(0, 0)
-        # elif thisisavariableforchoosingexploringdirection <= explore_chance*2:
-        #     target_corner = MapLocation(get_map_width()-1, 0)
-        # elif thisisavariableforchoosingexploringdirection <= explore_chance*3:
-        #     target_corner = MapLocation(0, get_map_height()-1)
-        # elif thisisavariableforchoosingexploringdirection <= explore_chance*4:
-        #     target_corner = MapLocation(get_map_width()-1, get_map_height()-1)
-        # if thisisavariableforchoosingexploringdirection <= explore_chance*4:
-        #     explore = random.randint(0, 100) # needs tuning
+    update_phases()
 
     # Prioritize chips in early game
     # Seems like chips are a bit too popular
@@ -394,16 +384,16 @@ def turn():
         is_early_game = False
         is_mid_game = True
         is_late_game = False
-        update_tower_chance(55, 40, 5)
-        update_bot_chance(50, 20, 30)
+        update_tower_chance(65, 35, 0)
+        update_bot_chance(45, 5, 50)
         explore_chance = 10
         updated = 2
     if turn_count >= mid_game and updated == 2:
         is_early_game = False
         is_mid_game = False
         is_late_game = True
-        update_tower_chance(40, 40, 20)
-        update_bot_chance(40, 25, 35)
+        update_tower_chance(55, 45, 0)
+        update_bot_chance(35, 0, 65)
         explore_chance = 0
         updated = 3
 
@@ -419,7 +409,6 @@ def turn():
     elif get_type() == UnitType.SPLASHER:
         run_splasher()
     elif get_type().is_tower_type():
-        update_direction_distribution()
         run_tower()
     else:
         pass  # Other robot types?
@@ -429,14 +418,14 @@ def update_phases():
     global mid_game
     game_area = get_map_height() * get_map_width()
     if game_area >= 400 and game_area < 1225: 
-        early_game = 45
-        mid_game = 450
+        early_game = 50
+        mid_game = 500
     elif game_area < 2115: 
-        early_game = 90
-        mid_game = 700
+        early_game = 125
+        mid_game = 675
     else:
-        early_game = 140
-        mid_game = 950
+        early_game = 200
+        mid_game = 850
 
 def run_tower():
     global buildCooldown
@@ -483,6 +472,8 @@ def run_tower():
 
         # If we are not currently saving and we receive the save chips message, start saving
         if not should_save and m.get_bytes() == 0:
+            if can_broadcast_message():
+                broadcast_message(0) # Let other towers know we're saving up for a tower
             savingTurns = save_turns
             should_save = True
 
@@ -493,16 +484,6 @@ def run_soldier():
     global explore, paintingSRP
     global nearby_tiles
     loc = get_location()
-    # Try exploring?
-    # if explore > 0 and (not paintingSRP):
-    #     bug2(target_corner)
-    #     if get_location().distance_squared_to(target_corner) <= 30:
-    #         explore = 1
-    #     explore -= 1
-    # 
-    # if explore == 0:
-    #     update_direction_distribution()
-    #     explore -= 1
 
     # Sense information about all visible nearby tiles.
     nearby_tiles = sense_nearby_map_infos(center=loc)
@@ -512,12 +493,19 @@ def run_soldier():
     cur_dist = 999999
     cur_dir = None
     cur_dist2 = 999999
+    dir_paint_count = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}
     for tile in nearby_tiles:
         tile_loc = tile.get_map_location()
         if tile.has_ruin():
             ruin = sense_robot_at_location(tile_loc)
-            if ruin != None and ruin.get_team() != get_team() and can_attack(tile_loc): # If enemy tower, attack
-                attack(tile_loc)
+            if ruin != None and ruin.get_team() != get_team(): # If enemy tower, attack
+                if can_attack(tile_loc):
+                    attack(tile_loc)
+                dir = loc.direction_to(tile_loc)
+                if not can_move(dir): continue
+                dst = loc.distance_squared_to(tile_loc)
+                idx = direction_indices[dir]
+                dir_paint_count[idx] = dir_paint_count[idx] + 100
             elif ruin == None: # If not enemy tower, try to complete
                 check_dist = tile_loc.distance_squared_to(loc)
                 if check_dist < cur_dist:
@@ -525,6 +513,10 @@ def run_soldier():
                     cur_ruin = tile
         elif not tile.is_wall() and tile.get_paint() == PaintType.EMPTY:
             dir = loc.direction_to(tile_loc)
+            if not can_move(dir): continue
+            dst = loc.distance_squared_to(tile_loc)
+            idx = direction_indices[dir]
+            dir_paint_count[idx] = dir_paint_count[idx] + 1/dst/dst/dst/dst
             dst = loc.distance_squared_to(tile_loc)
             if can_move(dir) and dst < cur_dist2:
                 cur_dist2 = dst
@@ -558,7 +550,7 @@ def run_soldier():
             target_loc = cur_ruin.get_map_location()
             # Complete the ruin if we can.
             for Tower_type in buildable_towers:
-                if Tower_type.is_tower_type() and can_complete_tower_pattern(Tower_type, target_loc):
+                if can_complete_tower_pattern(Tower_type, target_loc):
                     complete_tower_pattern(Tower_type, target_loc)
                     # Maybe try to remove mark
                     set_timeline_marker("Tower built", 0, 255, 0)
@@ -602,7 +594,17 @@ def run_soldier():
         try_to_upgrade_towers()
 
     # Make sure we go to empty square
-    if cur_dir is not None and can_move(cur_dir): move(cur_dir)
+    optimal_dir = -1
+    optimal = 0
+    for (test_dir, paint_count) in dir_paint_count.items():
+        if paint_count > optimal:
+            optimal = paint_count
+            optimal_dir = test_dir
+
+    if optimal_dir != -1:
+        cur_dir = directions[optimal_dir]
+        if can_move(cur_dir): move(cur_dir)
+
     dir = get_random_dir()
     if can_move(dir):
         move(dir)
@@ -692,19 +694,25 @@ def run_aggresive_splasher():
     loc = get_location()
     # Get all tiles we're gonna paint over to avoid painting on marked tiles 
     # Total splashed tiles = 13. We're gonna splash if splash_threshold+ tiles are splashable
+    to_attack = None
+    best_splash = splash_threshold
     if is_action_ready():
-        if can_attack(loc):
+        attackable_tiles = get_all_locations_within_radius_squared(center=loc, radius_squared=4)
+        for tile in attackable_tiles:
+            if not can_attack(loc): continue
+            local_nearby_tiles = sense_nearby_map_infos(center=tile, radius_squared=4)
             splashables = 0
-            for tile in nearby_tiles:
-                dst = loc.distance_squared_to(tile.get_map_location())
-                if dst > 4: continue
-                if dst > 2: # Can't override
-                    if (not tile.has_ruin()) and (not tile.is_wall()) and (tile.get_paint() == PaintType.EMPTY): splashables += 1
+            for splashed in local_nearby_tiles:
+                dst = tile.distance_squared_to(splashed.get_map_location())
+                if dst > 2:
+                    if (not splashed.has_ruin()) and (not splashed.is_wall()) and (splashed.get_paint() == PaintType.EMPTY): splashables += 1
                 else:
-                    if (not tile.has_ruin()) and (not tile.is_wall()) and (not tile.get_paint().is_ally()): splashables += 1
+                    if (not splashed.has_ruin()) and (not splashed.is_wall()) and (not splashed.get_paint().is_ally()): splashables += 1
+            if splashables >= best_splash: 
+                best_splash = splashables
+                to_attack = tile
             
-            if splashables >= splash_threshold:
-                attack(loc, False)
+        if can_attack(to_attack): attack(to_attack)
 
     # Prioritize moving to empty squares
     dir_paint_count = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}
@@ -723,6 +731,7 @@ def run_aggresive_splasher():
             idx = direction_indices[dir]
             if not tile.is_wall() and not tile.get_paint().is_ally(): 
                 dir_paint_count[idx] = dir_paint_count[idx] + 25
+                
     nearby_robots = sense_nearby_robots(center=loc)
     for robot in nearby_robots:
         robot_loc = robot.get_location()
@@ -826,6 +835,7 @@ def try_refill_paint(paint_percentage, unitType):
 def paint_nearby_marks():
     if not is_action_ready(): return
     for pattern_tile in nearby_tiles:
+        if pattern_tile.get_paint().is_enemy(): continue
         if pattern_tile.get_mark() != pattern_tile.get_paint() and pattern_tile.get_mark() != PaintType.EMPTY:
             use_secondary = (pattern_tile.get_mark() == PaintType.ALLY_SECONDARY)
             if can_attack(pattern_tile.get_map_location()):
