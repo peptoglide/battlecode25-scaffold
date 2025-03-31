@@ -294,11 +294,6 @@ def get_random_unit(probabilities):
         if n <= prob: return unit
         n -= prob
 
-def get_tower_type():
-    if get_num_towers() < 4:
-        return UnitType.LEVEL_ONE_MONEY_TOWER
-    return UnitType.LEVEL_ONE_MONEY_TOWER if get_num_towers() % 2 == 1 else UnitType.LEVEL_ONE_PAINT_TOWER
-
 # Determine build delays between each bot spawned by a tower
 buildDelay = 15 # Tune
 buildDeviation = 3
@@ -477,6 +472,8 @@ def run_tower():
 
         # If we are not currently saving and we receive the save chips message, start saving
         if not should_save and m.get_bytes() == 0:
+            if can_broadcast_message():
+                broadcast_message(0) # Let other towers know we're saving up for a tower
             savingTurns = save_turns
             should_save = True
 
@@ -576,7 +573,7 @@ def run_soldier():
                     if can_move(dir):
                         move(dir)
 
-                tower_type = get_tower_type()
+                tower_type = get_random_unit(tower_chance)
                 # Mark the pattern we need to draw to build a tower here if we haven't already.
                 target_loc = cur_ruin.get_map_location()
                 should_mark = target_loc.subtract(dir)

@@ -473,6 +473,7 @@ def run_tower():
 
         # If we are not currently saving and we receive the save chips message, start saving
         if not should_save and m.get_bytes() == 0:
+            
             savingTurns = save_turns
             should_save = True
 
