@@ -618,7 +618,12 @@ def run_soldier():
         attack(loc)
 
 def run_mopper():
+    global nearby_tiles
+    
     loc = get_location()
+    nearby_tiles = sense_nearby_map_infos(center=loc)
+    enemy_robots = sense_nearby_robots(center=loc, team=get_team().opponent())
+
     if is_messenger:
         set_indicator_dot(loc, 255, 0, 0)
 
@@ -629,39 +634,74 @@ def run_mopper():
         if can_move(dir):
             move(dir)
 
-    # Move and attack randomly.
-    # dir = directions[random.randint(0, len(directions) - 1)]
-    dir = get_random_dir()
-    enemy_robots = sense_nearby_robots(center=loc,radius_squared=2, team=get_team().opponent())
-    nearby_tiles = sense_nearby_map_infos(center=loc,radius_squared=2)
+    # Get best direction based on heuristic
+    dir_priority = {dir: 0 for dir in directions}
+    has_nearby_enemy_paint = False
+    detect_nearby_enemy_paint = False
+    for tile in nearby_tiles:
+        if tile.has_ruin() or tile.is_wall(): continue
+        tile_loc = tile.get_map_location()
+        dir = loc.direction_to(tile_loc)
+        dst = loc.distance_squared_to(tile.get_map_location())
+        paint = tile.get_paint()
+        if dst <= 2 and paint.is_enemy():
+            has_nearby_enemy_paint = True
+            break
+        if not can_move(dir): continue
+        
+        
+        if paint.is_enemy():
+            dir_priority[dir] = dir_priority[dir] + 500 / dst / dst / dst / dst  # 1st priority: enemy paint
+            detect_nearby_enemy_paint = True
+            
+    if not detect_nearby_enemy_paint:
+        for enemy in enemy_robots:
+            dir = loc.direction_to(enemy.get_location())
+            if not can_move(dir): continue
+
+            dir_priority[dir] = dir_priority[dir] + 1  # 2nd priority: enemy
+
+    # Freeze if detect nearby paint
+    if not has_nearby_enemy_paint:
+        # Make sure we go to empty square
+        optimal_dir = None
+        optimal = 0
+        for (test_dir, prio) in dir_priority.items():
+            if prio > optimal:
+                optimal = prio
+                optimal_dir = test_dir
+
+        if random.random() >= 0.01:
+            if can_move(optimal_dir): move(optimal_dir)
+
+        dir = get_random_dir()
+        if can_move(dir):
+            move(dir)
+
+    loc = get_location()
+
 
     if is_action_ready():
-        for tile in nearby_tiles:
-            if tile.get_paint() == PaintType.ENEMY_PRIMARY or tile.get_paint() == PaintType.ENEMY_SECONDARY:
-                mop_dir = loc.direction_to(tile.get_map_location())
-                mop_loc = loc.add(mop_dir)
-                if can_attack(mop_loc): 
-                    attack(mop_loc)
-                    break
-
         # Only attacks when sees enemy
         for enemy in enemy_robots:
             target_loc = enemy.get_location()
+            dst = loc.distance_squared_to(target_loc)
+            if dst > 2: continue
             swingDir = loc.direction_to(target_loc)
             if can_mop_swing(swingDir):
                 mop_swing(swingDir)
                 log("Mop Swing! Booyah!")
                 break
 
-        # Finds other allies to transfer paint
-        ally_robots = sense_nearby_robots(center=get_location(),radius_squared=2,team=get_team())
-        for ally in ally_robots:
-            ally_loc = ally.get_location()
-            if can_transfer_paint(ally_loc, 20): transfer_paint(ally_loc, 20)
-
-    if can_move(dir):
-        move(dir)
-
+        for tile in nearby_tiles:
+            dst = loc.distance_squared_to(tile.get_map_location())
+            if dst > 2: continue
+            if tile.get_paint().is_enemy():
+                mop_dir = loc.direction_to(tile.get_map_location())
+                mop_loc = loc.add(mop_dir)
+                if can_attack(mop_loc): 
+                    attack(mop_loc)
+                    break
 
     will_do_messenger = (get_id() % messenger_work_distribution == turn_count % messenger_work_distribution) # Split the work over many turns
     if will_do_messenger and is_messenger:
