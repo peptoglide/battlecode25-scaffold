@@ -457,23 +457,21 @@ def run_tower():
                 build_robot(robot_type, next_loc)
                 next_spawn = get_random_unit(bot_chance)
                 buildCooldown = buildDelay + random.randint(-buildDeviation, buildDeviation)
-                log("BUILT A " + bot_name[robot_type])
+                # log("BUILT A " + bot_name[robot_type])
 
     if buildCooldown > 0: buildCooldown -= 1
     if savingTurns > 0: 
         savingTurns -= 1
-        log("Saving for " + str(savingTurns) + " more turns")
+        # log("Saving for " + str(savingTurns) + " more turns")
     
 
     # Read incoming messages
     messages = read_messages()
     for m in messages:
-        log(f"Tower received message: '#{m.get_sender_id()}: {m.get_bytes()}'")
+        # log(f"Tower received message: '#{m.get_sender_id()}: {m.get_bytes()}'")
 
         # If we are not currently saving and we receive the save chips message, start saving
         if not should_save and m.get_bytes() == 0:
-            if can_broadcast_message():
-                broadcast_message(0) # Let other towers know we're saving up for a tower
             savingTurns = save_turns
             should_save = True
 
@@ -526,7 +524,7 @@ def run_soldier():
         paint_nearby_marks()
         if can_complete_resource_pattern(loc):
             complete_resource_pattern(loc)
-            log(f"Built a SRP at {loc}")
+            # log(f"Built a SRP at {loc}")
             paintingSRP = False
         return
     
@@ -554,7 +552,7 @@ def run_soldier():
                     complete_tower_pattern(Tower_type, target_loc)
                     # Maybe try to remove mark
                     set_timeline_marker("Tower built", 0, 255, 0)
-                    log("Built a tower at " + str(target_loc) + "!")
+                    # log("Built a tower at " + str(target_loc) + "!")
                     cur_ruin = None
             if cur_ruin != None:
                 dir = loc.direction_to(target_loc)
