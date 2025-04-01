@@ -399,6 +399,7 @@ def turn():
         update_bot_chance(35, 5, 60)
         updated = 3
 
+
     if not get_type().is_tower_type():
         if get_paint() == 0:
             disintegrate() # WASTING TOO MUCH RESOURCES
@@ -425,17 +426,17 @@ def update_phases():
     global mid_game
     game_area = get_map_height() * get_map_width()
     if game_area >= 400 and game_area < 1225: 
-        early_game = 25
+        early_game = 85
         mid_game = 500
-        non_painting_turns = 45
+        non_painting_turns = 30
     elif game_area < 2115: 
-        early_game = 45
+        early_game = 115
         mid_game = 675
-        non_painting_turns = 65
+        non_painting_turns = 55
     else:
-        early_game = 75
+        early_game = 150
         mid_game = 850
-        non_painting_turns = 95
+        non_painting_turns = 85
 
 def next_tower():
     if get_num_towers() < 4: return UnitType.LEVEL_ONE_MONEY_TOWER
@@ -633,10 +634,10 @@ def run_soldier():
                         move(dir)
                     else:
                         # Circle to be able to color every tile
-                        if dir == Direction.SOUTH: dir = Direction.EAST
-                        elif dir == Direction.EAST: dir = Direction.NORTH
-                        elif dir == Direction.NORTH: dir = Direction.WEST
-                        elif dir == Direction.WEST: dir = Direction.SOUTH
+                        if dir == Direction.SOUTH: dir = Direction.SOUTHEAST
+                        elif dir == Direction.EAST: dir = Direction.NORTHEAST
+                        elif dir == Direction.NORTH: dir = Direction.NORTHWEST
+                        elif dir == Direction.WEST: dir = Direction.SOUTHWEST
                         elif dir == Direction.SOUTHEAST: dir = Direction.EAST
                         elif dir == Direction.NORTHEAST: dir = Direction.NORTH
                         elif dir == Direction.NORTHWEST: dir = Direction.WEST

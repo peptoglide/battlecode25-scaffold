@@ -343,6 +343,7 @@ non_painting = non_painting_turns
 SRP = get_resource_pattern()
 PAINT_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER)
 MONEY_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_MONEY_TOWER)
+size_state = 0 # 0 small, 1 med, 2 big
 
 def can_repeat_cooldowned_action(time_delay):
     return (get_id() % time_delay == turn_count % time_delay)
@@ -380,7 +381,12 @@ def turn():
         is_mid_game = False
         is_late_game = False
         update_tower_chance(60, 40, 0)
-        update_bot_chance(80, 5, 15)
+        if size_state == 0:
+            update_bot_chance(60, 25, 15)
+        elif size_state == 1:
+            update_bot_chance(70, 10, 20)
+        else:
+            update_bot_chance(80, 5, 25)
         updated = 1
         buildDelay = 9
     if turn_count >= early_game and updated == 1:
@@ -388,15 +394,26 @@ def turn():
         is_mid_game = True
         is_late_game = False
         update_tower_chance(55, 45, 0)
-        update_bot_chance(50, 5, 45)
+        if size_state == 0:
+            update_bot_chance(35, 30, 35)
+        elif size_state == 1:
+            update_bot_chance(40, 15, 45)
+        else:
+            update_bot_chance(50, 5, 45)
         updated = 2
         buildDelay = 15
     if turn_count >= mid_game and updated == 2:
         is_early_game = False
         is_mid_game = False
         is_late_game = True
+        
         update_tower_chance(50, 50, 0)
-        update_bot_chance(35, 5, 60)
+        if size_state == 0:
+            update_bot_chance(25, 35, 40)
+        elif size_state == 1:
+            update_bot_chance(30, 20, 50)
+        else:
+            update_bot_chance(35, 5, 60)
         updated = 3
 
 
@@ -424,19 +441,23 @@ def update_phases():
     global early_game
     global non_painting_turns
     global mid_game
+    global size_state
     game_area = get_map_height() * get_map_width()
     if game_area >= 400 and game_area < 1225: 
         early_game = 85
         mid_game = 500
         non_painting_turns = 30
+        size_state = 0
     elif game_area < 2115: 
         early_game = 115
         mid_game = 675
         non_painting_turns = 55
+        size_state = 1
     else:
         early_game = 150
         mid_game = 850
         non_painting_turns = 85
+        size_state = 2
 
 def next_tower():
     if get_num_towers() < 4: return UnitType.LEVEL_ONE_MONEY_TOWER
@@ -634,10 +655,10 @@ def run_soldier():
                         move(dir)
                     else:
                         # Circle to be able to color every tile
-                        if dir == Direction.SOUTH: dir = Direction.EAST
-                        elif dir == Direction.EAST: dir = Direction.NORTH
-                        elif dir == Direction.NORTH: dir = Direction.WEST
-                        elif dir == Direction.WEST: dir = Direction.SOUTH
+                        if dir == Direction.SOUTH: dir = Direction.SOUTHEAST
+                        elif dir == Direction.EAST: dir = Direction.NORTHEAST
+                        elif dir == Direction.NORTH: dir = Direction.NORTHWEST
+                        elif dir == Direction.WEST: dir = Direction.SOUTHWEST
                         elif dir == Direction.SOUTHEAST: dir = Direction.EAST
                         elif dir == Direction.NORTHEAST: dir = Direction.NORTH
                         elif dir == Direction.NORTHWEST: dir = Direction.WEST
@@ -723,6 +744,7 @@ def run_mopper():
     loc = get_location()
     nearby_tiles = sense_nearby_map_infos(center=loc)
     enemy_robots = sense_nearby_robots(center=loc, team=get_team().opponent())
+    ally_robots = sense_nearby_robots(center=loc, team=get_team())
 
     if is_messenger:
         set_indicator_dot(loc, 255, 0, 0)
@@ -755,6 +777,13 @@ def run_mopper():
             detect_nearby_enemy_paint = True
 
     if not detect_nearby_enemy_paint:
+        # 2nd priority should be fellow moppers
+        # Mopper together stronk
+        # for ally in ally_robots:
+        #     dir = loc.direction_to(ally.get_location())
+        #     if not can_move(dir): continue
+
+        #     dir_priority[dir] = dir_priority[dir] + 35  # 2nd priority: enemy
         for enemy in enemy_robots:
             dir = loc.direction_to(enemy.get_location())
             if not can_move(dir): continue
