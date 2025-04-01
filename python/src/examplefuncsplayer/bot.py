@@ -779,11 +779,12 @@ def run_mopper():
     if not detect_nearby_enemy_paint:
         # 2nd priority should be fellow moppers
         # Mopper together stronk
-        # for ally in ally_robots:
-        #     dir = loc.direction_to(ally.get_location())
-        #     if not can_move(dir): continue
+        for ally in ally_robots:
+            if ally.get_type() != UnitType.MOPPER: continue
+            dir = loc.direction_to(ally.get_location())
+            if not can_move(dir): continue
 
-        #     dir_priority[dir] = dir_priority[dir] + 35  # 2nd priority: enemy
+            dir_priority[dir] = dir_priority[dir] + 35  # 2nd priority: ally mopper
         for enemy in enemy_robots:
             dir = loc.direction_to(enemy.get_location())
             if not can_move(dir): continue
