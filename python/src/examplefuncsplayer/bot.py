@@ -305,7 +305,7 @@ save_turns = 45 # Tune
 messenger_work_distribution = 25
 
 # How many turns after does a soldier senses towers
-sense_tower_delay = 10
+sense_tower_delay = 1
 
 # Threshold for returning to ruin (splashers)
 return_to_paint = {UnitType.SOLDIER : 0, UnitType.MOPPER : 0, UnitType.SPLASHER : 25}
@@ -318,6 +318,9 @@ paint_per_transfer = 50
 splash_threshold = 5
 # Duration of starting turns we don't paint
 non_painting_turns = 25
+# Starting point and max boost of build speed of paint towers
+fast_build_paint_percentage = 50
+fast_build_max_speed = 2 # Linear 
 
 # Privates
 buildCooldown = 0
@@ -393,7 +396,7 @@ def turn():
         else:
             update_bot_chance(80, 5, 25)
         updated = 1
-        buildDelay = 9
+        buildDelay = 15
     if turn_count >= early_game and updated == 1:
         is_early_game = False
         is_mid_game = True
@@ -493,11 +496,24 @@ def get_pattern_at_tile(tower_type, cur_ruin, cur_tile):
         if pattern_at_tile: return 1
         else: return 0
 
+def lerp(a, b, t):
+    # Linear interpolation
+    return (1 - t) * a + t * b
+
 def run_tower():
     global buildCooldown
     global savingTurns
     global should_save
     global next_spawn
+    global buildDelay
+    new_build_delay = buildDelay
+    if get_type().get_base_type() == UnitType.LEVEL_ONE_PAINT_TOWER:
+        # These hold 1000 paint
+        paint_percentage = get_paint() / 10
+        if paint_percentage > fast_build_paint_percentage:
+            progress = (paint_percentage - fast_build_paint_percentage) * 2
+            divisor = lerp(1, fast_build_max_speed, progress)
+            new_build_delay /= divisor
     
     # Pick a direction to build in.
     dir = get_random_dir()
@@ -523,7 +539,7 @@ def run_tower():
             if can_build_robot(robot_type, next_loc):
                 build_robot(robot_type, next_loc)
                 next_spawn = get_random_unit(bot_chance)
-                buildCooldown = buildDelay + random.randint(-buildDeviation, buildDeviation)
+                buildCooldown = new_build_delay + random.randint(-buildDeviation, buildDeviation)
                 log("BUILT A " + bot_name[robot_type])
 
     if buildCooldown > 0: buildCooldown -= 1
