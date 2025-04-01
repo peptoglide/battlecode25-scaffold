@@ -310,6 +310,8 @@ sense_tower_delay = 10
 # Threshold for returning to ruin (splashers)
 return_to_paint = {UnitType.SOLDIER : 0, UnitType.MOPPER : 0, UnitType.SPLASHER : 25}
 back_to_aggresion = {UnitType.SOLDIER : 75, UnitType.MOPPER : 50, UnitType.SPLASHER : 85}
+# Random constant walk chance
+const_walk_chance = {UnitType.SOLDIER : 0, UnitType.MOPPER : 0, UnitType.SPLASHER : 0}
 # Paint per transfer
 paint_per_transfer = 50
 # Min splashable squares to attack
@@ -339,6 +341,7 @@ is_mid_game = False
 is_late_game = False
 nearby_tiles = []
 const_dir = None
+is_const_walk = False
 non_painting = non_painting_turns
 SRP = get_resource_pattern()
 PAINT_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER)
@@ -361,8 +364,10 @@ def turn():
     global is_early_game, is_mid_game, is_late_game
     global non_painting_turns
     global non_painting
+    global is_const_walk
     # HOW DID NO ONE REALIZE TURN COUNT IS NOT COUNTING FROM THE START
     turn_count = get_round_num()
+    
 
     thisisavariableforchoosingmethodofrandomwalking = random.randint(1, 100)
     if direction_distribution[Direction.NORTH] == None:
@@ -418,6 +423,8 @@ def turn():
 
 
     if not get_type().is_tower_type():
+        if updated == 0 and random.randint(1, 100) < const_walk_chance[get_type()]:
+            is_const_walk = True
         if get_paint() == 0:
             disintegrate() # WASTING TOO MUCH RESOURCES
 
@@ -696,7 +703,7 @@ def run_soldier():
 
     # Make sure we go to empty square
     # While exploring, move in one direction till impossible
-    if non_painting > 0:
+    if non_painting > 0 or is_const_walk:
         if const_dir == None:
             const_dir = get_random_dir()
         if not can_move(const_dir):
@@ -794,15 +801,23 @@ def run_mopper():
     # Freeze if detect nearby paint
     if not has_nearby_enemy_paint:
         # Make sure we go to empty square
-        optimal_dir = None
-        optimal = 0
-        for (test_dir, prio) in dir_priority.items():
-            if prio > optimal:
-                optimal = prio
-                optimal_dir = test_dir
+        if is_const_walk:
+            if const_dir == None:
+                const_dir = get_random_dir()
+            if not can_move(const_dir):
+                const_dir = get_random_dir()
+            if can_move(const_dir):
+                move(const_dir)
+        else:
+            optimal_dir = None
+            optimal = 0
+            for (test_dir, prio) in dir_priority.items():
+                if prio > optimal:
+                    optimal = prio
+                    optimal_dir = test_dir
 
-        if random.random() >= 0.01:
-            if can_move(optimal_dir): move(optimal_dir)
+            if random.random() >= 0.01:
+                if can_move(optimal_dir): move(optimal_dir)
 
         dir = get_random_dir()
         if can_move(dir):
@@ -915,16 +930,24 @@ def run_aggresive_splasher():
         # Move to places with allies / enemies
         dir_paint_count[idx] = dir_paint_count[idx] + 1
 
-    optimal_dir = -1
-    optimal = 0
-    for (test_dir, paint_count) in dir_paint_count.items():
-        if paint_count > optimal:
-            optimal = paint_count
-            optimal_dir = test_dir
+    if is_const_walk:
+        if const_dir == None:
+            const_dir = get_random_dir()
+        if not can_move(const_dir):
+            const_dir = get_random_dir()
+        if can_move(const_dir):
+            move(const_dir)
+    else:
+        optimal_dir = -1
+        optimal = 0
+        for (test_dir, paint_count) in dir_paint_count.items():
+            if paint_count > optimal:
+                optimal = paint_count
+                optimal_dir = test_dir
 
-    if optimal_dir != -1:
-        cur_dir = directions[optimal_dir] if random.random() > 0.99 else get_random_dir() # Introduce some randomness
-        if can_move(cur_dir): move(cur_dir)
+        if optimal_dir != -1:
+            cur_dir = directions[optimal_dir] if random.random() > 0.99 else get_random_dir() # Introduce some randomness
+            if can_move(cur_dir): move(cur_dir)
 
     dir = get_random_dir()
     if can_move(dir):
