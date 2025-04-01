@@ -600,24 +600,24 @@ def run_soldier():
                     has_mark_at_bottom = True
                     bottom_mark = (tile2.get_mark() == PaintType.ALLY_SECONDARY)
 
-        if can_see_bottom and cur_ruin != None:
-            tower_type = get_random_unit(tower_chance)
-            bottom_tile_loc = bottom_tile.get_map_location()
-            if not has_mark_at_bottom:
-                # Mark at bottom. We designate primary for money and secondary for paint
-                if can_mark(bottom_tile_loc):
-                    # Fuck defense towers
-                    if tower_type == UnitType.LEVEL_ONE_MONEY_TOWER:
-                        mark(bottom_tile_loc, False)
-                        has_mark_at_bottom = True
-                        bottom_mark = 0
-                    else:
-                        mark(bottom_tile_loc, True)
-                        has_mark_at_bottom = True 
-                        bottom_mark = 1
-            else:
-                tower_type = (UnitType.LEVEL_ONE_MONEY_TOWER if bottom_mark == 0 else UnitType.LEVEL_ONE_PAINT_TOWER)
-            if has_mark_at_bottom:
+        if cur_ruin != None:
+            tower_type = next_tower()
+            # bottom_tile_loc = bottom_tile.get_map_location()
+            # if not has_mark_at_bottom:
+            #     # Mark at bottom. We designate primary for money and secondary for paint
+            #     if can_mark(bottom_tile_loc):
+            #         # Fuck defense towers
+            #         if tower_type == UnitType.LEVEL_ONE_MONEY_TOWER:
+            #             mark(bottom_tile_loc, False)
+            #             has_mark_at_bottom = True
+            #             bottom_mark = 0
+            #         else:
+            #             mark(bottom_tile_loc, True)
+            #             has_mark_at_bottom = True 
+            #             bottom_mark = 1
+            # else:
+            #     tower_type = (UnitType.LEVEL_ONE_MONEY_TOWER if bottom_mark == 0 else UnitType.LEVEL_ONE_PAINT_TOWER)
+            if True:
                 # Should circle around tower to be able to paint all tiles
                 # Complete the ruin if we can.
                 if can_complete_tower_pattern(tower_type, target_loc):
