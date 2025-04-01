@@ -332,7 +332,7 @@ savingTurns = 0
 updated = 0
 early_game = 200
 mid_game = 800
-tower_upgrade_minimum = 15000
+tower_upgrade_minimum = 12500
 closest_paint_tower = None
 is_refilling = False
 paintingSRP = False
@@ -396,7 +396,7 @@ def turn():
         else:
             update_bot_chance(80, 5, 25)
         updated = 1
-        buildDelay = 15
+        buildDelay = 14
     if turn_count >= early_game and updated == 1:
         is_early_game = False
         is_mid_game = True
