@@ -323,6 +323,8 @@ fast_build_paint_percentage = 50
 fast_build_max_speed = 2 # Linear 
 # Starting turns we spawn ASAP
 frenzy_turns = 25
+# How close we have to be to the center to build defense tower
+# The formula is <manhattan> / (<width> + <height>)
 
 # Privates
 buildCooldown = 0
@@ -463,19 +465,19 @@ def update_phases():
         early_game = 85
         mid_game = 500
         non_painting_turns = 30
-        frenzy_turns = 20
+        frenzy_turns = 5
         size_state = 0
     elif game_area < 2115: 
         early_game = 115
         mid_game = 675
         non_painting_turns = 55
-        frenzy_turns = 45
+        frenzy_turns = 5
         size_state = 1
     else:
         early_game = 150
         mid_game = 850
         non_painting_turns = 85
-        frenzy_turns = 65
+        frenzy_turns = 5
         size_state = 2
 
 def next_tower():
