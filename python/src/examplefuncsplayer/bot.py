@@ -1098,8 +1098,6 @@ def can_SRP_here():
                 return False
             if tile.get_paint().is_enemy() or ((tile.get_mark() == PaintType.ALLY_SECONDARY) != SRP[dx+2][dy+2] and tile.get_mark() != PaintType.EMPTY):
                 return False
-            if (tile.get_paint() == PaintType.ALLY_SECONDARY) and (not SRP[dx+2][dy+2]):
-                return False
             if tile.get_mark() != PaintType.EMPTY and tile.get_mark() == tile.get_paint(): correct_count += 1
     return True if correct_count < 25 else False
 
