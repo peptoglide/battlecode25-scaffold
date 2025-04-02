@@ -1085,6 +1085,8 @@ def complete_SRP():
 def can_SRP_here():
     check_squares = sense_nearby_map_infos(get_location())
     for tile in check_squares:
+        if get_location().distance_squared_to(tile.get_map_location()) == 16:
+            continue
         if tile.get_mark() != PaintType.EMPTY:
             return False
     correct_count = 0
