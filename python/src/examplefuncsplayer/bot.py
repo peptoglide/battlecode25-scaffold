@@ -617,7 +617,7 @@ def run_soldier():
                 cur_dir = dir
 
     if paintingSRP:
-        paint_nearby_marks()
+        complete_SRP()
         if can_complete_resource_pattern(loc):
             complete_resource_pattern(loc)
             log(f"Built a SRP at {loc}")
@@ -628,8 +628,8 @@ def run_soldier():
         # Checks in a square if all squares are empty
         paintingSRP = can_SRP_here()
         if paintingSRP:
-            if (can_mark_resource_pattern(loc)):
-                mark_resource_pattern(loc)
+            if (can_mark(loc)):
+                mark(loc, True)
                 return
             else:
                 paintingSRP = False
@@ -1063,8 +1063,28 @@ def paint_nearby_marks():
                 attack(pattern_tile.get_map_location(), use_secondary)
                 return
 
+# Complete SRP
+def complete_SRP():
+    global paintingSRP
+    for dx in range(-2, 3):
+        for dy in range(-2, 3):
+            tile = MapLocation(get_location().x+dx, get_location().y+dy)
+            info = sense_map_info(tile)
+            # Abort if sees enemy paint
+            if info.get_paint().is_enemy():
+                paintingSRP = False
+                remove_mark(get_location())
+                break
+            if (info.get_paint() == PaintType.ALLY_SECONDARY) != SRP[dx+2][dy+2]:
+                if can_attack(tile):
+                    attack(tile, SRP[dx+2][dy+2])
+
 # Check whether we can build an SRP here. Returns false if one is already present
 def can_SRP_here():
+    check_squares = sense_nearby_map_infos(get_location())
+    for tile in check_squares:
+        if tile.get_mark() != PaintType.EMPTY:
+            return False
     correct_count = 0
     for dx in range(-2, 3):
         for dy in range(-2, 3):
@@ -1075,6 +1095,8 @@ def can_SRP_here():
             if tile.is_wall() or tile.has_ruin():
                 return False
             if tile.get_paint().is_enemy() or ((tile.get_mark() == PaintType.ALLY_SECONDARY) != SRP[dx+2][dy+2] and tile.get_mark() != PaintType.EMPTY):
+                return False
+            if (tile.get_paint() == PaintType.ALLY_SECONDARY) and (not SRP[dx+2][dy+2]):
                 return False
             if tile.get_mark() != PaintType.EMPTY and tile.get_mark() == tile.get_paint(): correct_count += 1
     return True if correct_count < 25 else False

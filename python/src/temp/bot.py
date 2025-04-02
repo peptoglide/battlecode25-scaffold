@@ -305,7 +305,7 @@ save_turns = 45 # Tune
 messenger_work_distribution = 25
 
 # How many turns after does a soldier senses towers
-sense_tower_delay = 10
+sense_tower_delay = 1
 
 # Threshold for returning to ruin (splashers)
 return_to_paint = {UnitType.SOLDIER : 0, UnitType.MOPPER : 0, UnitType.SPLASHER : 25}
@@ -318,7 +318,11 @@ paint_per_transfer = 50
 splash_threshold = 5
 # Duration of starting turns we don't paint
 non_painting_turns = 25
-# 
+# Starting point and max boost of build speed of paint towers
+fast_build_paint_percentage = 50
+fast_build_max_speed = 2 # Linear 
+# Starting turns we spawn ASAP
+frenzy_turns = 25
 
 # Privates
 buildCooldown = 0
@@ -343,6 +347,7 @@ is_late_game = False
 nearby_tiles = []
 const_dir = None
 is_const_walk = False
+is_frenzy = True
 non_painting = non_painting_turns
 SRP = get_resource_pattern()
 PAINT_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER)
@@ -366,9 +371,11 @@ def turn():
     global non_painting_turns
     global non_painting
     global is_const_walk
+    global is_frenzy
     # HOW DID NO ONE REALIZE TURN COUNT IS NOT COUNTING FROM THE START
     turn_count = get_round_num()
-    
+    if turn_count > frenzy_turns:
+        is_frenzy = False
 
     thisisavariableforchoosingmethodofrandomwalking = random.randint(1, 100)
     if direction_distribution[Direction.NORTH] == None:
@@ -394,7 +401,7 @@ def turn():
         else:
             update_bot_chance(80, 5, 25)
         updated = 1
-        buildDelay = 9
+        buildDelay = 14
     if turn_count >= early_game and updated == 1:
         is_early_game = False
         is_mid_game = True
@@ -450,21 +457,25 @@ def update_phases():
     global non_painting_turns
     global mid_game
     global size_state
+    global frenzy_turns
     game_area = get_map_height() * get_map_width()
     if game_area >= 400 and game_area < 1225: 
         early_game = 85
         mid_game = 500
         non_painting_turns = 30
+        frenzy_turns = 20
         size_state = 0
     elif game_area < 2115: 
         early_game = 115
         mid_game = 675
         non_painting_turns = 55
+        frenzy_turns = 45
         size_state = 1
     else:
         early_game = 150
         mid_game = 850
         non_painting_turns = 85
+        frenzy_turns = 65
         size_state = 2
 
 def next_tower():
@@ -494,11 +505,23 @@ def get_pattern_at_tile(tower_type, cur_ruin, cur_tile):
         if pattern_at_tile: return 1
         else: return 0
 
+def lerp(a, b, t):
+    # Linear interpolation
+    return (1 - t) * a + t * b
+
 def run_tower():
     global buildCooldown
     global savingTurns
     global should_save
     global next_spawn
+    global buildDelay
+    progress = 1
+    if get_type().get_base_type() == UnitType.LEVEL_ONE_PAINT_TOWER:
+        # These hold 1000 paint
+        paint_percentage = get_paint() / 10
+        if paint_percentage > fast_build_paint_percentage:
+            lerp_t = (paint_percentage - fast_build_paint_percentage) / 50
+            progress = lerp(1, fast_build_max_speed, lerp_t)
     
     # Pick a direction to build in.
     dir = get_random_dir()
@@ -519,7 +542,7 @@ def run_tower():
     # Should hold off on building since we're gonna end up with all moppers!
     if savingTurns <= 0:
         should_save = False
-        if buildCooldown <= 0: 
+        if is_frenzy or buildCooldown <= 0: 
             robot_type = next_spawn
             if can_build_robot(robot_type, next_loc):
                 build_robot(robot_type, next_loc)
@@ -527,7 +550,7 @@ def run_tower():
                 buildCooldown = buildDelay + random.randint(-buildDeviation, buildDeviation)
                 log("BUILT A " + bot_name[robot_type])
 
-    if buildCooldown > 0: buildCooldown -= 1
+    if buildCooldown > 0: buildCooldown -= progress
     if savingTurns > 0: 
         savingTurns -= 1
         log("Saving for " + str(savingTurns) + " more turns")
