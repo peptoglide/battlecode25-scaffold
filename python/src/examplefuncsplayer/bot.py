@@ -324,8 +324,9 @@ fast_build_paint_percentage = 50
 fast_build_max_speed = 2 # Linear 
 # Starting turns we spawn ASAP
 frenzy_turns = 25
-# How close we have to be to the center to build defense tower
-# The formula is <manhattan> / (<width> + <height>)
+# Time till we change direction again
+change_dir_delay = 12
+change_dir_dev = 2
 
 # Privates
 buildCooldown = 0
@@ -352,6 +353,7 @@ const_dir = None
 is_const_walk = False
 is_frenzy = True
 non_painting = non_painting_turns
+time_till_next_dir = 0
 SRP = get_resource_pattern()
 PAINT_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER)
 MONEY_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_MONEY_TOWER)
@@ -375,6 +377,7 @@ def turn():
     global non_painting
     global is_const_walk
     global is_frenzy
+    global time_till_next_dir
     # HOW DID NO ONE REALIZE TURN COUNT IS NOT COUNTING FROM THE START
     turn_count = get_round_num()
     if turn_count > frenzy_turns:
@@ -454,6 +457,7 @@ def turn():
         pass  # Other robot types?
 
     non_painting = non_painting_turns - turn_count
+    time_till_next_dir -= 1
 
 def update_phases():
     global early_game
@@ -585,6 +589,8 @@ def run_aggresive_soldier():
     global nearby_tiles
     global const_dir
     global known_paint_towers
+    global time_till_next_dir
+
     loc = get_location()
 
     # Sense information about all visible nearby tiles.
@@ -749,20 +755,33 @@ def run_aggresive_soldier():
         if can_move(const_dir):
             move(const_dir)
     else:
-        optimal_dir = -1
-        optimal = 0
-        for (test_dir, paint_count) in dir_paint_count.items():
-            if paint_count > optimal:
-                optimal = paint_count
-                optimal_dir = test_dir
-
-        if optimal_dir != -1:
-            cur_dir = directions[optimal_dir]
-            if can_move(cur_dir): move(cur_dir)
-
-        dir = get_random_dir()
-        if can_move(dir):
-            move(dir)
+        if const_dir == None:
+            optimal_dir = -1
+            optimal = 0
+            for (test_dir, paint_count) in dir_paint_count.items():
+                if paint_count > optimal:
+                    optimal = paint_count
+                    optimal_dir = test_dir
+            if optimal_dir != -1:
+                const_dir = directions[optimal_dir]
+                time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
+        elif time_till_next_dir <= 0:
+            optimal_dir = -1
+            optimal = 0
+            for (test_dir, paint_count) in dir_paint_count.items():
+                if paint_count > optimal:
+                    optimal = paint_count
+                    optimal_dir = test_dir
+            if optimal_dir != -1:
+                const_dir = directions[optimal_dir]
+                time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
+        if const_dir == None:
+            const_dir = get_random_dir()
+        if const_dir != None:
+            if can_move(const_dir):
+                move(const_dir)
+            else:
+                const_dir = None
 
     loc = get_location()
 
@@ -797,6 +816,8 @@ def run_mopper():
 
 def run_aggresive_mopper():
     global nearby_tiles
+    global const_dir
+    global time_till_next_dir
     
     loc = get_location()
     nearby_tiles = sense_nearby_map_infos(center=loc)
@@ -866,13 +887,21 @@ def run_aggresive_mopper():
                 if prio > optimal:
                     optimal = prio
                     optimal_dir = test_dir
-
-            if random.random() >= 0.01:
-                if can_move(optimal_dir): move(optimal_dir)
-
-        dir = get_random_dir()
-        if can_move(dir):
-            move(dir)
+            if const_dir == None:
+                if optimal_dir != None:
+                    const_dir = optimal_dir
+                    time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
+            elif time_till_next_dir <= 0:
+                if optimal_dir != None:
+                    const_dir = optimal_dir
+                    time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
+            if const_dir == None:
+                const_dir = get_random_dir()
+            if const_dir != None:
+                if can_move(const_dir):
+                    move(const_dir)
+                else:
+                    const_dir = None
 
     loc = get_location()
 
@@ -926,6 +955,8 @@ def run_splasher():
 def run_aggresive_splasher():
     global known_paint_towers
     global nearby_tiles
+    global const_dir
+    global time_till_next_dir
     nearby_tiles = sense_nearby_map_infos(center=get_location())
     loc = get_location()
     # Get all tiles we're gonna paint over to avoid painting on marked tiles 
@@ -996,13 +1027,21 @@ def run_aggresive_splasher():
                 optimal = paint_count
                 optimal_dir = test_dir
 
-        if optimal_dir != -1:
-            cur_dir = directions[optimal_dir] if random.random() > 0.99 else get_random_dir() # Introduce some randomness
-            if can_move(cur_dir): move(cur_dir)
-
-    dir = get_random_dir()
-    if can_move(dir):
-        move(dir)
+        if const_dir == None:
+            if optimal_dir != -1:
+                const_dir = directions[optimal_dir]
+                time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
+        elif time_till_next_dir <= 0:
+            if optimal_dir != -1:
+                const_dir = directions[optimal_dir]
+                time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
+        if const_dir == None:
+            const_dir = get_random_dir()
+        if const_dir != None:
+            if can_move(const_dir):
+                move(const_dir)
+            else:
+                const_dir = None
 
     if can_repeat_cooldowned_action(sense_tower_delay):
         try_to_upgrade_towers()
