@@ -1152,7 +1152,7 @@ def complete_SRP():
                 paintingSRP = False
                 remove_mark(get_location())
                 break
-            if (info.get_paint() == PaintType.ALLY_SECONDARY) != SRP[dx+2][dy+2]:
+            if info.get_paint() == PaintType.EMPTY or ((info.get_paint() == PaintType.ALLY_SECONDARY) != SRP[dx+2][dy+2]):
                 if can_attack(tile):
                     attack(tile, SRP[dx+2][dy+2])
 
