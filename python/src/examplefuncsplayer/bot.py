@@ -126,6 +126,7 @@ buildable_towers = [UnitType.LEVEL_ONE_MONEY_TOWER, UnitType.LEVEL_ONE_PAINT_TOW
 bot_chance = {UnitType.SOLDIER : 40, UnitType.MOPPER : 25, UnitType.SPLASHER : 35}
 tower_chance = {UnitType.LEVEL_ONE_MONEY_TOWER : 65, UnitType.LEVEL_ONE_PAINT_TOWER : 25, UnitType.LEVEL_ONE_DEFENSE_TOWER : 10}
 bot_name = {UnitType.SOLDIER : "SOLDIER", UnitType.MOPPER : "MOPPER", UnitType.SPLASHER : "SPLASHER"}
+paint_capacity = {UnitType.SOLDIER : 200, UnitType.MOPPER : 100, UnitType.SPLASHER : 300}
 direction_distribution = {
     Direction.NORTH : None,
     Direction.NORTHEAST: None,
@@ -309,7 +310,7 @@ sense_tower_delay = 1
 
 # Threshold for returning to ruin (splashers)
 return_to_paint = {UnitType.SOLDIER : 0, UnitType.MOPPER : 0, UnitType.SPLASHER : 25}
-back_to_aggresion = {UnitType.SOLDIER : 75, UnitType.MOPPER : 50, UnitType.SPLASHER : 85}
+back_to_aggresion = {UnitType.SOLDIER : 75, UnitType.MOPPER : 75, UnitType.SPLASHER : 85}
 # Random constant walk chance
 const_walk_chance = {UnitType.SOLDIER : 0, UnitType.MOPPER : 0, UnitType.SPLASHER : 0}
 # Paint per transfer
@@ -336,7 +337,7 @@ savingTurns = 0
 updated = 0
 early_game = 200
 mid_game = 800
-tower_upgrade_minimum = 12500
+tower_upgrade_minimum = 8000
 closest_paint_tower = None
 is_refilling = False
 paintingSRP = False
@@ -481,10 +482,8 @@ def update_phases():
         size_state = 2
 
 def next_tower():
-    if get_num_towers() < 4: return UnitType.LEVEL_ONE_MONEY_TOWER
-    else:
-        if get_num_towers() % 2 == 1: return UnitType.LEVEL_ONE_MONEY_TOWER
-        return UnitType.LEVEL_ONE_PAINT_TOWER
+    if get_num_towers() % 2 == 0: return UnitType.LEVEL_ONE_MONEY_TOWER
+    return UnitType.LEVEL_ONE_PAINT_TOWER
 
 # Get paint color at current location. Will return -1 if already correct / out of ruin range. 0 if primary and 1 if secondary
 def get_pattern_at_tile(tower_type, cur_ruin, cur_tile):
@@ -572,9 +571,20 @@ def run_tower():
     # TODO: can we attack other bots?
 
 def run_soldier():
+    # Soldiers hold 200 paint
+    paint_percentage = get_paint() / 2
+    if len(known_paint_towers) == 0: run_aggresive_soldier()
+    else:
+        if not is_refilling and paint_percentage > return_to_paint[UnitType.SOLDIER]:
+            run_aggresive_soldier()
+        else:
+            try_refill_paint(paint_percentage, UnitType.SOLDIER)
+
+def run_aggresive_soldier():
     global paintingSRP
     global nearby_tiles
     global const_dir
+    global known_paint_towers
     loc = get_location()
 
     # Sense information about all visible nearby tiles.
@@ -635,6 +645,7 @@ def run_soldier():
                 return
             else:
                 paintingSRP = False
+    update_paint_towers()
 
     if cur_ruin != None:
         target_loc = cur_ruin.get_map_location()
@@ -722,6 +733,7 @@ def run_soldier():
 
     # Fill in any spots in the pattern with the appropriate paint.
     paint_nearby_marks()
+    
 
     # Upgrade towers
     if can_repeat_cooldowned_action(sense_tower_delay):
@@ -772,12 +784,25 @@ def run_soldier():
                 attack(nearest_tile_loc)
 
 def run_mopper():
+    global is_refilling
+    # Prioritize where without ally paint
+    # Splashers have max paint of 300
+    paint_percentage = get_paint()
+    if len(known_paint_towers) == 0: run_aggresive_mopper()
+    else:
+        if not is_refilling and paint_percentage > return_to_paint[UnitType.MOPPER]:
+            run_aggresive_mopper()
+        else:
+            try_refill_paint(paint_percentage, UnitType.MOPPER)
+
+def run_aggresive_mopper():
     global nearby_tiles
     
     loc = get_location()
     nearby_tiles = sense_nearby_map_infos(center=loc)
     enemy_robots = sense_nearby_robots(center=loc, team=get_team().opponent())
     ally_robots = sense_nearby_robots(center=loc, team=get_team())
+    update_paint_towers()
 
     if is_messenger:
         set_indicator_dot(loc, 255, 0, 0)
@@ -888,7 +913,6 @@ def run_mopper():
 #TODO (LITERALLY THE BIGGEST TODO YET)
 def run_splasher():
     global is_refilling
-    # dir = directions[random.randint(0, len(directions) - 1)]
     # Prioritize where without ally paint
     # Splashers have max paint of 300
     paint_percentage = get_paint() / 3
@@ -901,6 +925,7 @@ def run_splasher():
 
 def run_aggresive_splasher():
     global known_paint_towers
+    global nearby_tiles
     nearby_tiles = sense_nearby_map_infos(center=get_location())
     loc = get_location()
     # Get all tiles we're gonna paint over to avoid painting on marked tiles 
@@ -1052,7 +1077,17 @@ def try_refill_paint(paint_percentage, unitType):
             paint_tower = sense_robot_at_location(tower_loc)
             if paint_tower == None:
                 known_paint_towers.pop(0)
-            elif can_transfer_paint(tower_loc, -paint_per_transfer): transfer_paint(tower_loc, -paint_per_transfer)
+            else:
+                # Ensure we refill as much as possible
+                missing_paint = paint_capacity[unitType] - get_paint()
+                tower_paint = paint_tower.get_paint_amount()
+                transfer_amount = 0
+                if missing_paint > tower_paint:
+                    transfer_amount = tower_paint
+                else:
+                    transfer_amount = missing_paint
+                if can_transfer_paint(tower_loc, -transfer_amount):
+                    transfer_paint(tower_loc, -transfer_amount)
 
 # Ensure marked squares are painted the right color if encountered
 def paint_nearby_marks():
@@ -1071,6 +1106,7 @@ def complete_SRP():
     for dx in range(-2, 3):
         for dy in range(-2, 3):
             tile = MapLocation(get_location().x+dx, get_location().y+dy)
+            if not on_the_map(tile): continue
             info = sense_map_info(tile)
             # Abort if sees enemy paint
             if info.get_paint().is_enemy():
@@ -1105,3 +1141,15 @@ def can_SRP_here():
 
 def is_paint_tower(type):
     return type in {UnitType.LEVEL_ONE_PAINT_TOWER, UnitType.LEVEL_TWO_PAINT_TOWER, UnitType.LEVEL_THREE_PAINT_TOWER}
+
+def update_paint_towers():
+    global known_paint_towers
+    # Store every known towers
+    for tile in nearby_tiles:
+        tile_loc = tile.get_map_location()
+        if tile.has_ruin():
+            tower = sense_robot_at_location(tile_loc)
+            if (tower != None) and tower.get_team() == get_team(): # Is ally tower
+                if is_paint_tower(tower.get_type()): # Is paint tower
+                    if not (tile_loc in known_paint_towers):
+                        known_paint_towers.append(tile_loc)
