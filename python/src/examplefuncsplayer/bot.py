@@ -1003,13 +1003,13 @@ def run_aggresive_splasher():
             if not tile.is_wall() and not tile.get_paint().is_ally(): 
                 dir_paint_count[idx] = dir_paint_count[idx] + 25
                 
-    nearby_robots = sense_nearby_robots(center=loc)
+    nearby_robots = sense_nearby_robots(center=loc, team=get_team().opponent())
     for robot in nearby_robots:
         robot_loc = robot.get_location()
         dir = loc.direction_to(robot_loc)
         if not can_move(dir): continue
         idx = direction_indices[dir]
-        # Move to places with allies / enemies
+        # Move to places with enemies
         dir_paint_count[idx] = dir_paint_count[idx] + 1
 
     if is_const_walk:
