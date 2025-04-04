@@ -871,8 +871,8 @@ def run_aggresive_mopper():
                     nearest_safe = tile
 
     dir_priority = {dir: 0 for dir in directions}
-    has_nearby_enemy_paint = False
-    detect_nearby_enemy_paint = False
+    has_nearby_enemy_paint = False # Adjacent
+    detect_nearby_enemy_paint = False # Seeable
     for tile in nearby_tiles:
         if tile.has_ruin() or tile.is_wall(): continue
         tile_loc = tile.get_map_location()
@@ -905,7 +905,7 @@ def run_aggresive_mopper():
             if not can_move(dir): continue
             next_loc = loc.add(dir)
             if can_sense_location(next_loc) and not sense_map_info(next_loc).get_paint().is_ally():
-                continue
+                dir_priority[dir] = -50
 
             dir_priority[dir] = dir_priority[dir] + 35  # 2nd priority: ally mopper
         for enemy in enemy_robots:
@@ -913,47 +913,38 @@ def run_aggresive_mopper():
             if not can_move(dir): continue
             next_loc = loc.add(dir)
             if can_sense_location(next_loc) and not sense_map_info(next_loc).get_paint().is_ally():
-                continue
+                dir_priority[dir] = -50
 
             dir_priority[dir] = dir_priority[dir] + 1  # 2nd priority: enemy
 
     # Freeze if detect nearby paint
-    if not has_nearby_enemy_paint or is_on_unsafe:
+    if (not has_nearby_enemy_paint) or (is_on_unsafe):
         # Make sure we go to empty square
-        if is_const_walk:
-            if const_dir == None:
-                const_dir = get_random_dir()
-            if not can_move(const_dir):
-                const_dir = get_random_dir()
+        optimal_dir = None
+        optimal = 0
+        for (test_dir, prio) in dir_priority.items():
+            if prio > optimal:
+                optimal = prio
+                optimal_dir = test_dir
+        if const_dir == None:
+            if optimal_dir != None:
+                const_dir = optimal_dir
+                time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
+        elif time_till_next_dir <= 0:
+            if optimal_dir != None:
+                const_dir = optimal_dir
+                time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
+        if const_dir == None:
+            const_dir = get_random_dir()
+        if const_dir != None:
             if can_move(const_dir):
-                next_loc = loc.add(dir)
-                if can_sense_location(next_loc) and not sense_map_info(next_loc).get_paint().is_ally():
-                    const_dir = None
-                else: move(const_dir)
-        else:
-            optimal_dir = None
-            optimal = 0
-            for (test_dir, prio) in dir_priority.items():
-                if prio > optimal:
-                    optimal = prio
-                    optimal_dir = test_dir
-            if const_dir == None:
-                if optimal_dir != None:
-                    const_dir = optimal_dir
-                    time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
-            elif time_till_next_dir <= 0:
-                if optimal_dir != None:
-                    const_dir = optimal_dir
-                    time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
-            if const_dir == None:
-                const_dir = get_random_dir()
-            if const_dir != None:
-                if can_move(const_dir):
-                    next_loc = loc.add(const_dir)
-                    if can_sense_location(next_loc) and sense_map_info(next_loc).get_paint().is_ally():
-                        move(const_dir)
+                next_loc = loc.add(const_dir)
+                if can_sense_location(next_loc) and sense_map_info(next_loc).get_paint().is_ally():
+                    move(const_dir)
                 else:
                     const_dir = None
+            else:
+                const_dir = None
 
     loc = get_location()
 
