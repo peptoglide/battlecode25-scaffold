@@ -855,6 +855,21 @@ def run_aggresive_mopper():
             move(dir)
 
     # Get best direction based on heuristic
+    # We shouldn't move to directions with non-painted tiles
+    this_tile = sense_map_info(loc)
+    is_on_unsafe = False
+    nearest_safe = None
+    if not this_tile.get_paint().is_ally():
+        is_on_unsafe = True
+        # Retreat
+        cur_dist = 999999
+        for tile in nearby_tiles:
+            if tile.get_paint().is_ally():
+                dst = tile.get_map_location().distance_squared_to(loc)
+                if dst < cur_dist:
+                    cur_dist = dst
+                    nearest_safe = tile
+
     dir_priority = {dir: 0 for dir in directions}
     has_nearby_enemy_paint = False
     detect_nearby_enemy_paint = False
@@ -868,29 +883,42 @@ def run_aggresive_mopper():
             has_nearby_enemy_paint = True
             break
         if not can_move(dir): continue
-        
+        next_loc = loc.add(dir)
+        if can_sense_location(next_loc) and not sense_map_info(next_loc).get_paint().is_ally():
+            dir_priority[dir] = -50
         
         if paint.is_enemy():
             dir_priority[dir] = dir_priority[dir] + 500 / dst / dst / dst / dst  # 1st priority: enemy paint
             detect_nearby_enemy_paint = True
 
-    if not detect_nearby_enemy_paint:
+    if is_on_unsafe:
+        if nearest_safe != None:
+            bug2(nearest_safe.get_map_location())
+        else:
+            const_dir = get_random_dir()
+    elif not detect_nearby_enemy_paint:
         # 2nd priority should be fellow moppers
         # Mopper together stronk
         for ally in ally_robots:
             if ally.get_type() != UnitType.MOPPER: continue
             dir = loc.direction_to(ally.get_location())
             if not can_move(dir): continue
+            next_loc = loc.add(dir)
+            if can_sense_location(next_loc) and not sense_map_info(next_loc).get_paint().is_ally():
+                continue
 
             dir_priority[dir] = dir_priority[dir] + 35  # 2nd priority: ally mopper
         for enemy in enemy_robots:
             dir = loc.direction_to(enemy.get_location())
             if not can_move(dir): continue
+            next_loc = loc.add(dir)
+            if can_sense_location(next_loc) and not sense_map_info(next_loc).get_paint().is_ally():
+                continue
 
             dir_priority[dir] = dir_priority[dir] + 1  # 2nd priority: enemy
 
     # Freeze if detect nearby paint
-    if not has_nearby_enemy_paint:
+    if not has_nearby_enemy_paint or is_on_unsafe:
         # Make sure we go to empty square
         if is_const_walk:
             if const_dir == None:
@@ -898,7 +926,10 @@ def run_aggresive_mopper():
             if not can_move(const_dir):
                 const_dir = get_random_dir()
             if can_move(const_dir):
-                move(const_dir)
+                next_loc = loc.add(dir)
+                if can_sense_location(next_loc) and not sense_map_info(next_loc).get_paint().is_ally():
+                    const_dir = None
+                else: move(const_dir)
         else:
             optimal_dir = None
             optimal = 0
@@ -918,7 +949,9 @@ def run_aggresive_mopper():
                 const_dir = get_random_dir()
             if const_dir != None:
                 if can_move(const_dir):
-                    move(const_dir)
+                    next_loc = loc.add(const_dir)
+                    if can_sense_location(next_loc) and sense_map_info(next_loc).get_paint().is_ally():
+                        move(const_dir)
                 else:
                     const_dir = None
 
