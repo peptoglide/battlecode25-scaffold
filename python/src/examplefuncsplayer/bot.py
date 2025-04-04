@@ -481,13 +481,13 @@ def update_phases():
     global size_state
     global frenzy_turns
     game_area = get_map_height() * get_map_width()
-    if game_area >= 400 and game_area < 1225: 
+    if game_area >= 400 and game_area < 900: 
         early_game = 85
         mid_game = 500
         non_painting_turns = 30
         frenzy_turns = 5
         size_state = 0
-    elif game_area < 2115: 
+    elif game_area < 2000: 
         early_game = 115
         mid_game = 675
         non_painting_turns = 55
