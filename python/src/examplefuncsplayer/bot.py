@@ -1,4 +1,5 @@
 import random
+import math
 from enum import Enum
 #Hello world guys lol
 
@@ -327,6 +328,8 @@ frenzy_turns = 25
 # Time till we change direction again
 change_dir_delay = 12
 change_dir_dev = 2
+# This determines the area percentage of the circle where we build defense towers
+defense_area_percentage = 0.08
 
 # Privates
 buildCooldown = 0
@@ -354,9 +357,13 @@ is_const_walk = False
 is_frenzy = True
 non_painting = non_painting_turns
 time_till_next_dir = 0
+defense_radius_squared = 0
+game_area = 0
+center_loc = None
 SRP = get_resource_pattern()
 PAINT_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER)
 MONEY_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_MONEY_TOWER)
+DEFENSE_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_DEFENSE_TOWER)
 size_state = 0 # 0 small, 1 med, 2 big
 
 def can_repeat_cooldowned_action(time_delay):
@@ -378,10 +385,18 @@ def turn():
     global is_const_walk
     global is_frenzy
     global time_till_next_dir
+    global game_area
+    global defense_radius_squared
+    global center_loc
+
     # HOW DID NO ONE REALIZE TURN COUNT IS NOT COUNTING FROM THE START
     turn_count = get_round_num()
     if turn_count > frenzy_turns:
         is_frenzy = False
+
+    game_area = get_map_width() * get_map_height()
+    defense_radius_squared = game_area * defense_area_percentage / 3.14159
+    center_loc = MapLocation(math.floor((get_map_width() + 1) / 2), math.floor((get_map_height() + 1) / 2))
 
     thisisavariableforchoosingmethodofrandomwalking = random.randint(1, 100)
     if direction_distribution[Direction.NORTH] == None:
@@ -485,12 +500,16 @@ def update_phases():
         frenzy_turns = 5
         size_state = 2
 
-def next_tower():
+def next_tower(cur_ruin: MapInfo):
+    dst_to_center_squared = cur_ruin.get_map_location().distance_squared_to(center_loc)
+    if dst_to_center_squared <= defense_radius_squared:
+        return UnitType.LEVEL_ONE_DEFENSE_TOWER
     if get_num_towers() % 2 == 0: return UnitType.LEVEL_ONE_MONEY_TOWER
     return UnitType.LEVEL_ONE_PAINT_TOWER
 
 # Get paint color at current location. Will return -1 if already correct / out of ruin range. 0 if primary and 1 if secondary
 def get_pattern_at_tile(tower_type, cur_ruin, cur_tile):
+    tower_patterns = {UnitType.LEVEL_ONE_PAINT_TOWER: PAINT_PATTERN, UnitType.LEVEL_ONE_MONEY_TOWER: MONEY_PATTERN, UnitType.LEVEL_ONE_DEFENSE_TOWER: DEFENSE_PATTERN}
     if cur_tile.has_ruin(): return -1
     paint_of_tile = cur_tile.get_paint()
     if paint_of_tile.is_enemy(): return -1 # Skip if enemy paint
@@ -502,7 +521,7 @@ def get_pattern_at_tile(tower_type, cur_ruin, cur_tile):
     # Get indices of rows and columns
     row = 2 + tile_loc.x - ruin_loc.x
     col = 2 - tile_loc.y + ruin_loc.y
-    pattern_at_tile = (PAINT_PATTERN[row][col] if (tower_type == UnitType.LEVEL_ONE_PAINT_TOWER) else MONEY_PATTERN[row][col])
+    pattern_at_tile = tower_patterns[tower_type][row][col]
     if (pattern_at_tile == (paint_of_tile == PaintType.ALLY_SECONDARY)) and paint_of_tile != PaintType.EMPTY: # If ally paint
         return -1
     else:
@@ -673,7 +692,7 @@ def run_aggresive_soldier():
                     bottom_mark = (tile2.get_mark() == PaintType.ALLY_SECONDARY)
 
         if cur_ruin != None:
-            tower_type = next_tower()
+            tower_type = next_tower(cur_ruin)
             # bottom_tile_loc = bottom_tile.get_map_location()
             # if not has_mark_at_bottom:
             #     # Mark at bottom. We designate primary for money and secondary for paint
