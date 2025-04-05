@@ -1,4 +1,5 @@
 import random
+import math
 from enum import Enum
 #Hello world guys lol
 
@@ -327,6 +328,8 @@ frenzy_turns = 25
 # Time till we change direction again
 change_dir_delay = 12
 change_dir_dev = 2
+# This determines the area percentage of the circle where we build defense towers
+defense_area_percentage = 0.08
 
 # Privates
 buildCooldown = 0
@@ -354,9 +357,13 @@ is_const_walk = False
 is_frenzy = True
 non_painting = non_painting_turns
 time_till_next_dir = 0
+defense_radius_squared = 0
+game_area = 0
+center_loc = None
 SRP = get_resource_pattern()
 PAINT_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER)
 MONEY_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_MONEY_TOWER)
+DEFENSE_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_DEFENSE_TOWER)
 size_state = 0 # 0 small, 1 med, 2 big
 
 def can_repeat_cooldowned_action(time_delay):
@@ -378,10 +385,18 @@ def turn():
     global is_const_walk
     global is_frenzy
     global time_till_next_dir
+    global game_area
+    global defense_radius_squared
+    global center_loc
+
     # HOW DID NO ONE REALIZE TURN COUNT IS NOT COUNTING FROM THE START
     turn_count = get_round_num()
     if turn_count > frenzy_turns:
         is_frenzy = False
+
+    game_area = get_map_width() * get_map_height()
+    defense_radius_squared = game_area * defense_area_percentage / 3.14159
+    center_loc = MapLocation(math.floor((get_map_width() + 1) / 2), math.floor((get_map_height() + 1) / 2))
 
     thisisavariableforchoosingmethodofrandomwalking = random.randint(1, 100)
     if direction_distribution[Direction.NORTH] == None:
@@ -466,13 +481,13 @@ def update_phases():
     global size_state
     global frenzy_turns
     game_area = get_map_height() * get_map_width()
-    if game_area >= 400 and game_area < 1225: 
+    if game_area >= 400 and game_area < 900: 
         early_game = 85
         mid_game = 500
         non_painting_turns = 30
         frenzy_turns = 5
         size_state = 0
-    elif game_area < 2115: 
+    elif game_area < 2000: 
         early_game = 115
         mid_game = 675
         non_painting_turns = 55
@@ -485,12 +500,16 @@ def update_phases():
         frenzy_turns = 5
         size_state = 2
 
-def next_tower():
+def next_tower(cur_ruin: MapInfo):
+    dst_to_center_squared = cur_ruin.get_map_location().distance_squared_to(center_loc)
+    if dst_to_center_squared <= defense_radius_squared:
+        return UnitType.LEVEL_ONE_DEFENSE_TOWER
     if get_num_towers() % 2 == 0: return UnitType.LEVEL_ONE_MONEY_TOWER
     return UnitType.LEVEL_ONE_PAINT_TOWER
 
 # Get paint color at current location. Will return -1 if already correct / out of ruin range. 0 if primary and 1 if secondary
 def get_pattern_at_tile(tower_type, cur_ruin, cur_tile):
+    tower_patterns = {UnitType.LEVEL_ONE_PAINT_TOWER: PAINT_PATTERN, UnitType.LEVEL_ONE_MONEY_TOWER: MONEY_PATTERN, UnitType.LEVEL_ONE_DEFENSE_TOWER: DEFENSE_PATTERN}
     if cur_tile.has_ruin(): return -1
     paint_of_tile = cur_tile.get_paint()
     if paint_of_tile.is_enemy(): return -1 # Skip if enemy paint
@@ -502,7 +521,7 @@ def get_pattern_at_tile(tower_type, cur_ruin, cur_tile):
     # Get indices of rows and columns
     row = 2 + tile_loc.x - ruin_loc.x
     col = 2 - tile_loc.y + ruin_loc.y
-    pattern_at_tile = (PAINT_PATTERN[row][col] if (tower_type == UnitType.LEVEL_ONE_PAINT_TOWER) else MONEY_PATTERN[row][col])
+    pattern_at_tile = tower_patterns[tower_type][row][col]
     if (pattern_at_tile == (paint_of_tile == PaintType.ALLY_SECONDARY)) and paint_of_tile != PaintType.EMPTY: # If ally paint
         return -1
     else:
@@ -673,7 +692,7 @@ def run_aggresive_soldier():
                     bottom_mark = (tile2.get_mark() == PaintType.ALLY_SECONDARY)
 
         if cur_ruin != None:
-            tower_type = next_tower()
+            tower_type = next_tower(cur_ruin)
             # bottom_tile_loc = bottom_tile.get_map_location()
             # if not has_mark_at_bottom:
             #     # Mark at bottom. We designate primary for money and secondary for paint
@@ -836,9 +855,24 @@ def run_aggresive_mopper():
             move(dir)
 
     # Get best direction based on heuristic
+    # We shouldn't move to directions with non-painted tiles
+    this_tile = sense_map_info(loc)
+    is_on_unsafe = False
+    nearest_safe = None
+    if not this_tile.get_paint().is_ally():
+        is_on_unsafe = True
+        # Retreat
+        cur_dist = 999999
+        for tile in nearby_tiles:
+            if tile.get_paint().is_ally():
+                dst = tile.get_map_location().distance_squared_to(loc)
+                if dst < cur_dist:
+                    cur_dist = dst
+                    nearest_safe = tile
+
     dir_priority = {dir: 0 for dir in directions}
-    has_nearby_enemy_paint = False
-    detect_nearby_enemy_paint = False
+    has_nearby_enemy_paint = False # Adjacent
+    detect_nearby_enemy_paint = False # Seeable
     for tile in nearby_tiles:
         if tile.has_ruin() or tile.is_wall(): continue
         tile_loc = tile.get_map_location()
@@ -849,59 +883,68 @@ def run_aggresive_mopper():
             has_nearby_enemy_paint = True
             break
         if not can_move(dir): continue
-        
+        next_loc = loc.add(dir)
+        if can_sense_location(next_loc) and not sense_map_info(next_loc).get_paint().is_ally():
+            dir_priority[dir] = -50
         
         if paint.is_enemy():
             dir_priority[dir] = dir_priority[dir] + 500 / dst / dst / dst / dst  # 1st priority: enemy paint
             detect_nearby_enemy_paint = True
 
-    if not detect_nearby_enemy_paint:
+    if is_on_unsafe:
+        if nearest_safe != None:
+            bug2(nearest_safe.get_map_location())
+        else:
+            const_dir = get_random_dir()
+    elif not detect_nearby_enemy_paint:
         # 2nd priority should be fellow moppers
         # Mopper together stronk
         for ally in ally_robots:
             if ally.get_type() != UnitType.MOPPER: continue
             dir = loc.direction_to(ally.get_location())
             if not can_move(dir): continue
+            next_loc = loc.add(dir)
+            if can_sense_location(next_loc) and not sense_map_info(next_loc).get_paint().is_ally():
+                dir_priority[dir] = -50
 
             dir_priority[dir] = dir_priority[dir] + 35  # 2nd priority: ally mopper
         for enemy in enemy_robots:
             dir = loc.direction_to(enemy.get_location())
             if not can_move(dir): continue
+            next_loc = loc.add(dir)
+            if can_sense_location(next_loc) and not sense_map_info(next_loc).get_paint().is_ally():
+                dir_priority[dir] = -50
 
             dir_priority[dir] = dir_priority[dir] + 1  # 2nd priority: enemy
 
     # Freeze if detect nearby paint
-    if not has_nearby_enemy_paint:
+    if (not has_nearby_enemy_paint) or (is_on_unsafe):
         # Make sure we go to empty square
-        if is_const_walk:
-            if const_dir == None:
-                const_dir = get_random_dir()
-            if not can_move(const_dir):
-                const_dir = get_random_dir()
+        optimal_dir = None
+        optimal = 0
+        for (test_dir, prio) in dir_priority.items():
+            if prio > optimal:
+                optimal = prio
+                optimal_dir = test_dir
+        if const_dir == None:
+            if optimal_dir != None:
+                const_dir = optimal_dir
+                time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
+        elif time_till_next_dir <= 0:
+            if optimal_dir != None:
+                const_dir = optimal_dir
+                time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
+        if const_dir == None:
+            const_dir = get_random_dir()
+        if const_dir != None:
             if can_move(const_dir):
-                move(const_dir)
-        else:
-            optimal_dir = None
-            optimal = 0
-            for (test_dir, prio) in dir_priority.items():
-                if prio > optimal:
-                    optimal = prio
-                    optimal_dir = test_dir
-            if const_dir == None:
-                if optimal_dir != None:
-                    const_dir = optimal_dir
-                    time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
-            elif time_till_next_dir <= 0:
-                if optimal_dir != None:
-                    const_dir = optimal_dir
-                    time_till_next_dir = change_dir_delay + random.randint(-change_dir_dev, change_dir_dev)
-            if const_dir == None:
-                const_dir = get_random_dir()
-            if const_dir != None:
-                if can_move(const_dir):
+                next_loc = loc.add(const_dir)
+                if can_sense_location(next_loc) and sense_map_info(next_loc).get_paint().is_ally():
                     move(const_dir)
                 else:
                     const_dir = None
+            else:
+                const_dir = None
 
     loc = get_location()
 
@@ -1003,13 +1046,13 @@ def run_aggresive_splasher():
             if not tile.is_wall() and not tile.get_paint().is_ally(): 
                 dir_paint_count[idx] = dir_paint_count[idx] + 25
                 
-    nearby_robots = sense_nearby_robots(center=loc)
+    nearby_robots = sense_nearby_robots(center=loc, team=get_team().opponent())
     for robot in nearby_robots:
         robot_loc = robot.get_location()
         dir = loc.direction_to(robot_loc)
         if not can_move(dir): continue
         idx = direction_indices[dir]
-        # Move to places with allies / enemies
+        # Move to places with enemies
         dir_paint_count[idx] = dir_paint_count[idx] + 1
 
     if is_const_walk:
