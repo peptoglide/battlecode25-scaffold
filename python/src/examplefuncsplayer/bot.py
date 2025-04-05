@@ -581,7 +581,8 @@ def run_tower():
             
             if get_type().get_base_type() != UnitType.LEVEL_ONE_PAINT_TOWER and paint_capacity[robot_type] > get_paint():
                 next_spawn = get_random_unit(bot_chance)
-
+            if get_paint() >= 200 and get_paint() < 300:
+                robot_type = UnitType.SOLDIER
             # Test every building direction
             if can_build_robot(robot_type, next_loc):
                 build_robot(robot_type, next_loc)
