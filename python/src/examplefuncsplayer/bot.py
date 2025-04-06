@@ -331,7 +331,7 @@ change_dir_dev = 2
 # This determines the area percentage of the circle where we build defense towers
 defense_area_percentage = 0.08
 # Time for each money tower before disintegrating
-money_tower_existence = 45
+money_tower_existence = 50
 # Chips to immediately disintegrate
 flicker_chips_threshold = 2000
 
