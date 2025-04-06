@@ -333,7 +333,7 @@ defense_area_percentage = 0.08
 # Time for each money tower before disintegrating
 money_tower_existence = 45
 # Chips to immediately disintegrate
-flicker_chips_threshold = 4000
+flicker_chips_threshold = 2000
 
 # Privates
 buildCooldown = 0
@@ -422,9 +422,9 @@ def turn():
         is_late_game = False
         update_tower_chance(60, 40, 0)
         if size_state == 0:
-            update_bot_chance(60, 25, 15)
+            update_bot_chance(60, 10, 30)
         elif size_state == 1:
-            update_bot_chance(70, 10, 20)
+            update_bot_chance(70, 4, 26)
         else:
             update_bot_chance(80, 5, 25)
         updated = 1
@@ -435,9 +435,9 @@ def turn():
         is_late_game = False
         update_tower_chance(55, 45, 0)
         if size_state == 0:
-            update_bot_chance(35, 30, 35)
+            update_bot_chance(35, 15, 50)
         elif size_state == 1:
-            update_bot_chance(40, 15, 45)
+            update_bot_chance(40, 8, 52)
         else:
             update_bot_chance(50, 5, 45)
         updated = 2
@@ -449,9 +449,9 @@ def turn():
         
         update_tower_chance(50, 50, 0)
         if size_state == 0:
-            update_bot_chance(25, 35, 40)
+            update_bot_chance(25, 15, 60)
         elif size_state == 1:
-            update_bot_chance(30, 20, 50)
+            update_bot_chance(30, 10, 60)
         else:
             update_bot_chance(35, 5, 60)
         updated = 3
