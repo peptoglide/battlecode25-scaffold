@@ -422,11 +422,11 @@ def turn():
         is_late_game = False
         update_tower_chance(60, 40, 0)
         if size_state == 0:
-            update_bot_chance(60, 10, 30)
+            update_bot_chance(60, 5, 35)
         elif size_state == 1:
-            update_bot_chance(70, 4, 26)
+            update_bot_chance(70, 3, 27)
         else:
-            update_bot_chance(80, 5, 25)
+            update_bot_chance(80, 1, 19)
         updated = 1
         buildDelay = 14
     if turn_count >= early_game and updated == 1:
@@ -435,11 +435,11 @@ def turn():
         is_late_game = False
         update_tower_chance(55, 45, 0)
         if size_state == 0:
-            update_bot_chance(35, 15, 50)
+            update_bot_chance(35, 8, 57)
         elif size_state == 1:
-            update_bot_chance(40, 8, 52)
+            update_bot_chance(40, 5, 55)
         else:
-            update_bot_chance(50, 5, 45)
+            update_bot_chance(50, 3, 47)
         updated = 2
         buildDelay = 15
     if turn_count >= mid_game and updated == 2:
@@ -449,11 +449,11 @@ def turn():
         
         update_tower_chance(50, 50, 0)
         if size_state == 0:
-            update_bot_chance(25, 15, 60)
+            update_bot_chance(25, 10, 65)
         elif size_state == 1:
-            update_bot_chance(30, 10, 60)
+            update_bot_chance(30, 6, 64)
         else:
-            update_bot_chance(35, 5, 60)
+            update_bot_chance(35, 4, 61)
         updated = 3
 
 
