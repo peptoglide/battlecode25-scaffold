@@ -560,7 +560,7 @@ def run_tower():
     next_loc = loc.add(dir)
     nearby_robots = sense_nearby_robots(center=loc)
     nearby_tiles = sense_nearby_map_infos(center=loc, radius_squared=8)
-    if get_type().get_base_type() != UnitType.LEVEL_ONE_PAINT_TOWER:
+    if True:
         buildDelay = 0
         buildDeviation = 0
 
@@ -583,7 +583,7 @@ def run_tower():
             
             if get_type().get_base_type() != UnitType.LEVEL_ONE_PAINT_TOWER and paint_capacity[robot_type] > get_paint():
                 next_spawn = get_random_unit(bot_chance)
-            if get_type().get_base_type() != UnitType.LEVEL_ONE_PAINT_TOWER and get_paint() >= 200 and get_paint() < 300:
+            if get_paint() >= 200 and get_paint() < 300:
                 robot_type = UnitType.SOLDIER
             # Test every building direction
             if can_build_robot(robot_type, next_loc):
@@ -680,6 +680,8 @@ def run_aggresive_soldier():
     dir_paint_count = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}
     for tile in nearby_tiles:
         tile_loc = tile.get_map_location()
+        if can_complete_resource_pattern(tile_loc):
+            complete_resource_pattern(tile_loc)
         if tile.has_ruin():
             ruin = sense_robot_at_location(tile_loc)
             if ruin != None and ruin.get_team() != get_team(): # If enemy tower, attack
@@ -709,24 +711,6 @@ def run_aggresive_soldier():
             if can_move(dir) and dst < cur_dist2:
                 cur_dist2 = dst
                 cur_dir = dir
-
-    if paintingSRP:
-        complete_SRP()
-        if can_complete_resource_pattern(loc):
-            complete_resource_pattern(loc)
-            log(f"Built a SRP at {loc}")
-            paintingSRP = False
-        return
-    
-    if is_mid_game or (is_late_game and random.randint(1, 100) <= 5):
-        # Checks in a square if all squares are empty
-        paintingSRP = can_SRP_here()
-        if paintingSRP:
-            if (can_mark(loc)):
-                mark(loc, True)
-                return
-            else:
-                paintingSRP = False
     update_paint_towers()
 
     if cur_ruin != None:
@@ -846,7 +830,8 @@ def run_aggresive_soldier():
     if non_painting <= 0 and is_action_ready():
         for tile in nearby_tiles:
             tile_loc = tile.get_map_location()
-            if not can_attack(tile_loc) or tile.get_paint() != PaintType.EMPTY: continue
+            if not can_attack(tile_loc): continue # Skip if can't attack
+            if tile.get_paint() != PaintType.EMPTY or tile.get_paint().is_enemy(): continue # Can't override enemy paint
             dst = loc.distance_squared_to(tile_loc)
             if dst < nearest_dst:
                 nearest_dst = dst
@@ -854,7 +839,7 @@ def run_aggresive_soldier():
         if nearest_tile != None:
             nearest_tile_loc = nearest_tile.get_map_location()
             if can_attack(nearest_tile_loc):
-                attack(nearest_tile_loc)
+                attack(nearest_tile_loc, get_pattern_at_loc(nearest_tile_loc)) # SRP tiling
 
 def run_mopper():
     global is_refilling
@@ -1223,7 +1208,7 @@ def complete_SRP():
             # Abort if sees enemy paint
             if info.get_paint().is_enemy():
                 paintingSRP = False
-                remove_mark(get_location())
+                #remove_mark(get_location())
                 break
             if info.get_paint() == PaintType.EMPTY or ((info.get_paint() == PaintType.ALLY_SECONDARY) != SRP[dx+2][dy+2]):
                 if can_attack(tile):
@@ -1265,3 +1250,19 @@ def update_paint_towers():
                 if is_paint_tower(tower.get_type()): # Is paint tower
                     if not (tile_loc in known_paint_towers):
                         known_paint_towers.append(tile_loc)
+
+# SRP pattern tile!
+def get_pattern_at_loc(loc: MapLocation):
+    row = get_map_height() - loc.y # One indexed
+    if loc.x % 4 == 0:
+        if row % 4 == 3: return False # Primary
+        return True # Secondary
+    elif loc.x % 4 == 1:
+        if row % 4 == 1: return True
+        return False
+    elif loc.x % 4 == 2:
+        if row % 4 == 3: return True
+        return False
+    else:
+        if row % 4 == 1: return True
+        return False
