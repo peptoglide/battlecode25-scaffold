@@ -671,6 +671,7 @@ def run_aggresive_soldier():
 
     # Sense information about all visible nearby tiles.
     nearby_tiles = sense_nearby_map_infos(center=loc)
+    nearby_ruins = [] # Stores positions of unfinished ruins
 
     cur_ruin = None
     dir = None
@@ -683,6 +684,7 @@ def run_aggresive_soldier():
         if can_complete_resource_pattern(tile_loc):
             complete_resource_pattern(tile_loc)
         if tile.has_ruin():
+            nearby_ruins.append(tile_loc)
             ruin = sense_robot_at_location(tile_loc)
             if ruin != None and ruin.get_team() != get_team(): # If enemy tower, attack
                 if can_attack(tile_loc):
@@ -697,7 +699,9 @@ def run_aggresive_soldier():
                 idx = direction_indices[dir]
                 dir_paint_count[idx] = dir_paint_count[idx] + 100
             elif ruin == None: # If not enemy tower, try to complete
+                
                 check_dist = tile_loc.distance_squared_to(loc)
+
                 if check_dist < cur_dist:
                     cur_dist = check_dist
                     cur_ruin = tile
@@ -825,13 +829,30 @@ def run_aggresive_soldier():
 
     # Try to paint beneath us as we walk to avoid paint penalties.
     # Avoiding wasting paint by re-painting our own tiles.
+    nearby_tiles = sense_nearby_map_infos(center=loc)
+    nearby_ruins = [] # Stores positions of unfinished ruins
+    for tile in nearby_tiles:
+        if tile.has_ruin(): nearby_ruins.append(tile.get_map_location())
     nearest_tile = None
     nearest_dst = 999999
     if non_painting <= 0 and is_action_ready():
         for tile in nearby_tiles:
+            # Only paint in radius 2
             tile_loc = tile.get_map_location()
+            if tile_loc.distance_squared_to(loc) > 4: continue
             if not can_attack(tile_loc): continue # Skip if can't attack
-            if tile.get_paint() != PaintType.EMPTY or tile.get_paint().is_enemy(): continue # Can't override enemy paint
+            if tile.get_paint() != PaintType.EMPTY:
+                if tile.get_paint().is_ally():
+                    if ((tile.get_paint() == PaintType.ALLY_SECONDARY) == get_pattern_at_loc(tile_loc)): continue # No need to override
+                    # Can override if not in range of any ruins
+                    can_override = True
+                    for ruin in nearby_ruins:
+                        dst = ruin.distance_squared_to(tile_loc)
+                        if dst <= 8:
+                            can_override = False
+                            break
+                    if not can_override: continue
+                elif tile.get_paint().is_enemy(): continue # Can't override enemy paint
             dst = loc.distance_squared_to(tile_loc)
             if dst < nearest_dst:
                 nearest_dst = dst
