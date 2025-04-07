@@ -544,6 +544,7 @@ def run_tower():
     global is_starting_tower
     global nearby_tiles
     global active_turns
+    global buildDeviation
 
     progress = 1
     
@@ -559,8 +560,9 @@ def run_tower():
     next_loc = loc.add(dir)
     nearby_robots = sense_nearby_robots(center=loc)
     nearby_tiles = sense_nearby_map_infos(center=loc, radius_squared=8)
-    buildDelay = 0
-    buildDeviation = 0
+    if get_type().get_base_type() != UnitType.LEVEL_ONE_PAINT_TOWER:
+        buildDelay = 0
+        buildDeviation = 0
 
     # Ability for towers to attack
     if(is_action_ready() and len(nearby_robots) != 0):
@@ -581,7 +583,7 @@ def run_tower():
             
             if get_type().get_base_type() != UnitType.LEVEL_ONE_PAINT_TOWER and paint_capacity[robot_type] > get_paint():
                 next_spawn = get_random_unit(bot_chance)
-            if get_paint() >= 200 and get_paint() < 300:
+            if get_type().get_base_type() != UnitType.LEVEL_ONE_PAINT_TOWER and get_paint() >= 200 and get_paint() < 300:
                 robot_type = UnitType.SOLDIER
             # Test every building direction
             if can_build_robot(robot_type, next_loc):
@@ -729,11 +731,15 @@ def run_aggresive_soldier():
 
     if cur_ruin != None:
         target_loc = cur_ruin.get_map_location()
+        has_enemy_paint = False
+        has_ally_paint = False
         for tile2 in nearby_tiles:
             tile2_loc = tile2.get_map_location()
             if tile2.get_paint().is_enemy() and cur_ruin.get_map_location().distance_squared_to(tile2.get_map_location()) <= 8: 
-                cur_ruin = None
-                break
+                has_enemy_paint = True
+            if tile2.get_paint().is_ally() and cur_ruin.get_map_location().distance_squared_to(tile2.get_map_location()) <= 8: 
+                has_ally_paint = True
+        if has_enemy_paint and has_ally_paint: cur_ruin = None # If can't complete, impede the progress of the opponent team
 
         if cur_ruin != None:
             tower_type = next_tower(cur_ruin)

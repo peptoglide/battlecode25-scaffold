@@ -330,6 +330,10 @@ change_dir_delay = 12
 change_dir_dev = 2
 # This determines the area percentage of the circle where we build defense towers
 defense_area_percentage = 0.08
+# Time for each money tower before disintegrating
+money_tower_existence = 50
+# Chips to immediately disintegrate
+flicker_chips_threshold = 2000
 
 # Privates
 buildCooldown = 0
@@ -359,6 +363,8 @@ non_painting = non_painting_turns
 time_till_next_dir = 0
 defense_radius_squared = 0
 game_area = 0
+is_starting_tower = -1 # -1 means unset. 0 means False and 1 means True
+active_turns = 0 # Turns this unit has existed
 center_loc = None
 SRP = get_resource_pattern()
 PAINT_PATTERN = get_tower_pattern(UnitType.LEVEL_ONE_PAINT_TOWER)
@@ -416,11 +422,11 @@ def turn():
         is_late_game = False
         update_tower_chance(60, 40, 0)
         if size_state == 0:
-            update_bot_chance(60, 25, 15)
+            update_bot_chance(60, 5, 35)
         elif size_state == 1:
-            update_bot_chance(70, 10, 20)
+            update_bot_chance(70, 3, 27)
         else:
-            update_bot_chance(80, 5, 25)
+            update_bot_chance(80, 1, 19)
         updated = 1
         buildDelay = 14
     if turn_count >= early_game and updated == 1:
@@ -429,11 +435,11 @@ def turn():
         is_late_game = False
         update_tower_chance(55, 45, 0)
         if size_state == 0:
-            update_bot_chance(35, 30, 35)
+            update_bot_chance(35, 8, 57)
         elif size_state == 1:
-            update_bot_chance(40, 15, 45)
+            update_bot_chance(40, 5, 55)
         else:
-            update_bot_chance(50, 5, 45)
+            update_bot_chance(50, 3, 47)
         updated = 2
         buildDelay = 15
     if turn_count >= mid_game and updated == 2:
@@ -443,11 +449,11 @@ def turn():
         
         update_tower_chance(50, 50, 0)
         if size_state == 0:
-            update_bot_chance(25, 35, 40)
+            update_bot_chance(25, 10, 65)
         elif size_state == 1:
-            update_bot_chance(30, 20, 50)
+            update_bot_chance(30, 6, 64)
         else:
-            update_bot_chance(35, 5, 60)
+            update_bot_chance(35, 4, 61)
         updated = 3
 
 
@@ -501,11 +507,7 @@ def update_phases():
         size_state = 2
 
 def next_tower(cur_ruin: MapInfo):
-    dst_to_center_squared = cur_ruin.get_map_location().distance_squared_to(center_loc)
-    if dst_to_center_squared <= defense_radius_squared:
-        return UnitType.LEVEL_ONE_DEFENSE_TOWER
-    if get_num_towers() % 2 == 0: return UnitType.LEVEL_ONE_MONEY_TOWER
-    return UnitType.LEVEL_ONE_PAINT_TOWER
+    return UnitType.LEVEL_ONE_MONEY_TOWER
 
 # Get paint color at current location. Will return -1 if already correct / out of ruin range. 0 if primary and 1 if secondary
 def get_pattern_at_tile(tower_type, cur_ruin, cur_tile):
@@ -539,24 +541,32 @@ def run_tower():
     global should_save
     global next_spawn
     global buildDelay
+    global is_starting_tower
+    global nearby_tiles
+    global active_turns
+
     progress = 1
-    if get_type().get_base_type() == UnitType.LEVEL_ONE_PAINT_TOWER:
-        # These hold 1000 paint
-        paint_percentage = get_paint() / 10
-        if paint_percentage > fast_build_paint_percentage:
-            lerp_t = (paint_percentage - fast_build_paint_percentage) / 50
-            progress = lerp(1, fast_build_max_speed, lerp_t)
+    
+    if is_starting_tower == -1:
+        if turn_count <= 3:
+            is_starting_tower = True
+        else: is_starting_tower = False
     
     # Pick a direction to build in.
     dir = get_random_dir()
+    
     loc = get_location()
-    next_loc = get_location().add(dir)
-    enemy_robots = sense_nearby_robots(center=get_location(),team=get_team().opponent())
+    next_loc = loc.add(dir)
+    nearby_robots = sense_nearby_robots(center=loc)
+    nearby_tiles = sense_nearby_map_infos(center=loc, radius_squared=8)
+    buildDelay = 0
+    buildDeviation = 0
 
     # Ability for towers to attack
-    if(is_action_ready() and len(enemy_robots) != 0):
+    if(is_action_ready() and len(nearby_robots) != 0):
         # Pick a random target to attack
-        for random_enemy in enemy_robots:
+        for random_enemy in nearby_robots:
+            if random_enemy.get_team() == get_team(): continue
             loc2 = random_enemy.get_location()
             if can_attack(random_enemy.get_location()):
                 attack(loc2)
@@ -568,11 +578,20 @@ def run_tower():
         should_save = False
         if is_frenzy or buildCooldown <= 0: 
             robot_type = next_spawn
+            
+            if get_type().get_base_type() != UnitType.LEVEL_ONE_PAINT_TOWER and paint_capacity[robot_type] > get_paint():
+                next_spawn = get_random_unit(bot_chance)
+            if get_paint() >= 200 and get_paint() < 300:
+                robot_type = UnitType.SOLDIER
+            # Test every building direction
             if can_build_robot(robot_type, next_loc):
                 build_robot(robot_type, next_loc)
                 next_spawn = get_random_unit(bot_chance)
                 buildCooldown = buildDelay + random.randint(-buildDeviation, buildDeviation)
                 log("BUILT A " + bot_name[robot_type])
+
+    if (get_paint() <= 100) and (not is_starting_tower and (get_chips() >= flicker_chips_threshold or active_turns >= money_tower_existence)):
+        if can_complete_tower(loc, nearby_robots): disintegrate()
 
     if buildCooldown > 0: buildCooldown -= progress
     if savingTurns > 0: 
@@ -590,8 +609,44 @@ def run_tower():
                 broadcast_message(0) # Let other towers know we're saving up for a tower
             savingTurns = save_turns
             should_save = True
+
+    active_turns += 1
     
     # TODO: can we attack other bots?
+
+def can_complete_tower(loc: MapLocation, nearby_robots):
+    tower_patterns = {UnitType.LEVEL_ONE_PAINT_TOWER: PAINT_PATTERN, UnitType.LEVEL_ONE_MONEY_TOWER: MONEY_PATTERN, UnitType.LEVEL_ONE_DEFENSE_TOWER: DEFENSE_PATTERN}
+    tower_type = get_type().get_base_type()
+
+    # Check for correctness, allies and enemy paint
+    correct = 0 # Tower is complete if correct = 24
+    for tile in nearby_tiles:
+        if tile.has_ruin(): continue
+        tile_paint = tile.get_paint()
+
+        if tile_paint.is_enemy(): # Immediately can't complete if there's enemy paint
+            return False
+
+        tile_loc = tile.get_map_location()
+        row = 2 + tile_loc.x - loc.x
+        col = 2 - tile_loc.y + loc.y
+        pattern_at_tile = tower_patterns[tower_type][row][col]
+        if tile_paint != PaintType.EMPTY and ((tile_paint == PaintType.ALLY_SECONDARY) == pattern_at_tile):
+            correct += 1
+
+    has_soldier = False
+    has_other_robots = False
+    for robot in nearby_robots:
+        if robot.get_team() != get_team(): continue
+        if robot.get_type() == UnitType.SOLDIER: has_soldier = True
+        else: has_other_robots = True
+
+    if has_soldier:
+        return True # Soldiers can recomplete tower
+    if has_other_robots and correct == 24:
+        #return True # Rely on other robots to activate the tower
+        pass
+    return False
 
 def run_soldier():
     # Soldiers hold 200 paint
@@ -674,40 +729,14 @@ def run_aggresive_soldier():
 
     if cur_ruin != None:
         target_loc = cur_ruin.get_map_location()
-        can_see_bottom = False
-        has_mark_at_bottom = False
-        bottom_tile = None
-        bottom_mark = -1
         for tile2 in nearby_tiles:
             tile2_loc = tile2.get_map_location()
             if tile2.get_paint().is_enemy() and cur_ruin.get_map_location().distance_squared_to(tile2.get_map_location()) <= 8: 
                 cur_ruin = None
                 break
-            if tile2_loc.x == target_loc.x and tile2_loc.y == target_loc.y - 1:
-                can_see_bottom = True
-                bottom_tile = tile2
-                # Directly below
-                if tile2.get_mark() != PaintType.EMPTY:
-                    has_mark_at_bottom = True
-                    bottom_mark = (tile2.get_mark() == PaintType.ALLY_SECONDARY)
 
         if cur_ruin != None:
             tower_type = next_tower(cur_ruin)
-            # bottom_tile_loc = bottom_tile.get_map_location()
-            # if not has_mark_at_bottom:
-            #     # Mark at bottom. We designate primary for money and secondary for paint
-            #     if can_mark(bottom_tile_loc):
-            #         # Fuck defense towers
-            #         if tower_type == UnitType.LEVEL_ONE_MONEY_TOWER:
-            #             mark(bottom_tile_loc, False)
-            #             has_mark_at_bottom = True
-            #             bottom_mark = 0
-            #         else:
-            #             mark(bottom_tile_loc, True)
-            #             has_mark_at_bottom = True 
-            #             bottom_mark = 1
-            # else:
-            #     tower_type = (UnitType.LEVEL_ONE_MONEY_TOWER if bottom_mark == 0 else UnitType.LEVEL_ONE_PAINT_TOWER)
             if True:
                 # Should circle around tower to be able to paint all tiles
                 # Complete the ruin if we can.
@@ -1136,12 +1165,7 @@ def update_friendly_towers():
 
 
 def try_to_upgrade_towers():
-    towers = sense_nearby_ruins(radius_squared=2)
-    if get_chips() >= tower_upgrade_minimum:
-        for ruins in towers:
-            if can_upgrade_tower(ruins):
-                upgrade_tower(ruins)
-                log(f"Upgraded tower at {str(ruins)}!")
+    return
 
 def try_refill_paint(paint_percentage, unitType):
     global known_paint_towers
